@@ -26,24 +26,33 @@ export const TILE_COLORS: Record<TileType, string> = {
 export const DEFAULT_WIDTH = 20;
 export const DEFAULT_HEIGHT = 12;
 
+export type EnemyType = 'standard' | 'scout' | 'tank';
+
 export interface Enemy {
   id: string;
+  type: EnemyType;
   x: number; // Float for smooth movement
   y: number;
   pathIndex: number; // The index of the *next* tile they are moving towards
   speed: number;
   health: number;
   maxHealth: number;
+  reward: number;
   frozen?: boolean;
 }
+
+export const ENEMY_STATS: Record<EnemyType, { health: number; speed: number; reward: number; color: string }> = {
+  standard: { health: 100, speed: 2.5, reward: 10, color: 'bg-red-500' },
+  scout: { health: 40, speed: 4.5, reward: 5, color: 'bg-yellow-400' },
+  tank: { health: 300, speed: 1.2, reward: 25, color: 'bg-blue-600' },
+};
 
 export type GameState = 'editing' | 'playing' | 'paused' | 'gameover';
 
 export interface Wave {
   count: number;
   interval: number; // ms between spawns
-  enemyHealth: number;
-  enemySpeed: number;
+  types: EnemyType[]; // Pool of enemies to spawn from
 }
 
 export interface TurretEntity {

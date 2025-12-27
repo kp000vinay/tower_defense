@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, TURRET_COST, UPGRADE_COST, KILL_REWARD } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, TURRET_COST, UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -16,6 +16,11 @@ export function useGameEngine(
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(20);
   const [money, setMoney] = useState(100);
+  const [currentWave, setCurrentWave] = useState<Wave>({
+    count: 5,
+    interval: 1500,
+    types: ['standard']
+  });
   
   // Refs for mutable state in game loop
   const enemiesRef = useRef<Enemy[]>([]);
@@ -129,16 +134,30 @@ export function useGameEngine(
     // Spawning Logic
     if (enemiesToSpawnRef.current > 0) {
       spawnTimerRef.current += deltaTime;
-      if (spawnTimerRef.current > 1000) { // Spawn every 1 second
+      if (spawnTimerRef.current > currentWave.interval) {
         spawnEnemy(path[0]);
         spawnTimerRef.current = 0;
         enemiesToSpawnRef.current--;
       }
     } else if (enemiesRef.current.length === 0 && lives > 0) {
-      // Wave Complete - Start next wave after delay (simplified for now)
-      // For now, just infinite waves
-      setWave(w => w + 1);
-      enemiesToSpawnRef.current = 5 + wave * 2;
+      // Wave Complete
+      setWave(w => {
+        const nextWave = w + 1;
+        
+        // Dynamic Wave Composition
+        let types: EnemyType[] = ['standard'];
+        if (nextWave >= 2) types.push('scout');
+        if (nextWave >= 4) types.push('tank');
+        
+        setCurrentWave(prev => ({
+          count: Math.floor(prev.count * 1.2) + 2,
+          interval: Math.max(300, prev.interval - 20),
+          types: types
+        }));
+        
+        enemiesToSpawnRef.current = Math.floor(currentWave.count * 1.2) + 2;
+        return nextWave;
+      });
     }
 
     // Move Enemies
@@ -223,7 +242,7 @@ export function useGameEngine(
         target.health -= proj.damage;
         if (target.health <= 0) {
           // Enemy killed
-          moneyEarned += KILL_REWARD;
+          moneyEarned += target.reward;
           // Remove enemy from nextEnemies immediately so other projectiles don't target it
           nextEnemies = nextEnemies.filter(e => e.id !== target.id);
         }
@@ -308,14 +327,23 @@ export function useGameEngine(
   };
 
   const spawnEnemy = (startPos: {x: number, y: number}) => {
+    // Pick random type from current wave pool
+    const type = currentWave.types[Math.floor(Math.random() * currentWave.types.length)];
+    const stats = ENEMY_STATS[type];
+    
+    // Scale stats by wave number
+    const healthMultiplier = 1 + (wave - 1) * 0.2;
+    
     const newEnemy: Enemy = {
       id: crypto.randomUUID(),
+      type,
       x: startPos.x,
       y: startPos.y,
-      pathIndex: 1, // Start moving to the second node
-      speed: 2.5 + (wave * 0.1), // Speed increases slightly per wave
-      health: 10 + (wave * 5),
-      maxHealth: 10 + (wave * 5),
+      pathIndex: 1,
+      speed: stats.speed,
+      health: stats.health * healthMultiplier,
+      maxHealth: stats.health * healthMultiplier,
+      reward: stats.reward
     };
     enemiesRef.current.push(newEnemy);
   };

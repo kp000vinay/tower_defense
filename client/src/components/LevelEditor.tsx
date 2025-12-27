@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, UPGRADE_COST } from '@/lib/gameTypes';
+import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, UPGRADE_COST, ENEMY_STATS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
 import { Enemy } from '@/lib/gameTypes';
@@ -345,29 +345,36 @@ export default function LevelEditor() {
               })
             ))}
             
-            {/* Render Enemies Layer */}
-            {enemies.map(enemy => (
-              <div
-                key={enemy.id}
-                className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-[0_0_10px_rgba(239,68,68,0.8)] z-20 pointer-events-none transition-transform will-change-transform"
-                style={{
-                  left: `${enemy.x * 2.5 + 0.5}rem`, // 2.5rem = w-10 (40px)
-                  top: `${enemy.y * 2.5 + 0.5}rem`,
-                  transform: 'translate(-50%, -50%)'
-                }}
-              >
-                {/* Health Bar */}
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/50 rounded overflow-hidden">
-                  <div 
-                    className="h-full bg-green-500" 
-                    style={{ width: `${(enemy.health / enemy.maxHealth) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+            {/* Enemy */}
+                {enemies.map(enemy => {
+                  const stats = ENEMY_STATS[enemy.type];
+                  return (
+                    <div
+                      key={enemy.id}
+                      className={`absolute w-6 h-6 ${stats.color} rounded-full shadow-[0_0_10px_rgba(255,255,255,0.3)] z-20 transition-transform duration-100 flex items-center justify-center`}
+                      style={{
+                        left: `calc(${enemy.x} * 100% / ${width} + 50% / ${width} - 0.75rem)`,
+                        top: `calc(${enemy.y} * 100% / ${height} + 50% / ${height} - 0.75rem)`,
+                      }}
+                    >
+                      {/* Type Indicator */}
+                      <span className="text-[8px] font-bold text-black/80 uppercase tracking-tighter">
+                        {enemy.type === 'tank' ? 'TNK' : enemy.type === 'scout' ? 'SCT' : ''}
+                      </span>
 
-            {/* Render Projectiles Layer */}
-            {projectiles.map(proj => (
+                      {/* Health Bar */}
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/50 rounded overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-100 ${enemy.type === 'tank' ? 'bg-blue-400' : enemy.type === 'scout' ? 'bg-yellow-400' : 'bg-green-500'}`}
+                          style={{ width: `${(enemy.health / enemy.maxHealth) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Render Projectiles Layer */}
+                {projectiles.map(proj => (
               <div
                 key={proj.id}
                 className="absolute w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.8)] z-30 pointer-events-none will-change-transform"
