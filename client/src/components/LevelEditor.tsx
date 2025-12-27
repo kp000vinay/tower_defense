@@ -13,7 +13,7 @@ export default function LevelEditor() {
   const [levelName, setLevelName] = useState('New Sector');
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
-  const [selectedTool, setSelectedTool] = useState<TileType>('wall');
+  const [selectedTool, setSelectedTool] = useState<TileType | 'sell'>('wall');
   // Initialize grid state with default values immediately to avoid undefined access
   const [grid, setGrid] = useState<TileType[][]>(() => 
     Array(DEFAULT_HEIGHT).fill(null).map(() => Array(DEFAULT_WIDTH).fill('empty'))
@@ -42,12 +42,26 @@ export default function LevelEditor() {
     stopGame,
     buildTurret,
     upgradeTurret,
-    getTurretAt
+    getTurretAt,
+    sellTurret
   } = useGameEngine(width, height, grid);
 
   const handleTileClick = (x: number, y: number) => {
     if (gameState === 'playing') {
       // In-game building logic
+      if (selectedTool === 'sell') {
+        if (grid[y][x] === 'turret') {
+          const originalTile = sellTurret(x, y);
+          if (originalTile) {
+            const newGrid = [...grid];
+            newGrid[y][x] = originalTile;
+            setGrid(newGrid);
+            toast.success('Turret recycled!');
+          }
+        }
+        return;
+      }
+
       if (selectedTool === 'turret') {
         if (grid[y][x] === 'empty' || grid[y][x] === 'wall') {
           if (buildTurret(x, y)) {
@@ -74,10 +88,12 @@ export default function LevelEditor() {
     }
 
     // Editor logic
-    const newGrid = [...grid];
-    newGrid[y][x] = selectedTool;
-    setGrid(newGrid);
-    updatePathPreview(newGrid);
+    if (selectedTool !== 'sell') {
+      const newGrid = [...grid];
+      newGrid[y][x] = selectedTool;
+      setGrid(newGrid);
+      updatePathPreview(newGrid);
+    }
   };
 
   const updatePathPreview = (currentGrid: TileType[][]) => {
@@ -206,6 +222,25 @@ export default function LevelEditor() {
                 {type === 'turret' && <span className="text-[10px] text-yellow-500 font-bold">{TURRET_COST} CR</span>}
               </button>
             ))}
+            
+            {/* Sell Tool */}
+            <button
+              onClick={() => setSelectedTool('sell')}
+              disabled={gameState !== 'playing'}
+              className={`
+                p-3 flex flex-col items-center justify-center gap-2 border transition-all
+                ${selectedTool === 'sell' 
+                  ? 'border-red-500 bg-red-500/10 shadow-[0_0_10px_rgba(239,68,68,0.3)]' 
+                  : 'border-border hover:border-red-500/50 hover:bg-red-500/5'}
+                ${gameState !== 'playing' ? 'opacity-30 cursor-not-allowed' : ''}
+              `}
+            >
+              <div className="w-8 h-8 bg-red-900/50 border border-red-500/50 flex items-center justify-center">
+                <span className="text-red-500 font-bold text-lg">×</span>
+              </div>
+              <span className="text-xs uppercase font-mono tracking-wider text-red-400">SELL</span>
+            </button>
+
             {gameState === 'playing' && (
               <div className="col-span-2 mt-2 p-2 bg-primary/10 border border-primary/30 rounded text-xs text-center">
                 <p className="text-primary font-bold mb-1">UPGRADE SYSTEM</p>
@@ -261,6 +296,7 @@ export default function LevelEditor() {
                       w-10 h-10 transition-colors duration-75 relative
                       ${TILE_COLORS[tileType]}
                       ${gameState === 'editing' || (gameState === 'playing' && (tileType === 'empty' || tileType === 'wall' || tileType === 'turret')) ? 'cursor-pointer hover:brightness-125' : ''}
+                      ${selectedTool === 'sell' && tileType === 'turret' ? 'hover:bg-red-500/50 hover:border-red-500' : ''}
                       border border-white/5
                     `}
                     title={`Coordinates: ${x},${y}`}

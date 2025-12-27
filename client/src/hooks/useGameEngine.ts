@@ -78,7 +78,8 @@ export function useGameEngine(
             cooldown: 800, // ms
             lastFired: 0,
             targetId: null,
-            level: 1
+            level: 1,
+            originalTile: 'empty' // Default for pre-placed turrets
           });
         }
       }
@@ -266,7 +267,8 @@ export function useGameEngine(
         cooldown: 800,
         lastFired: 0,
         targetId: null,
-        level: 1
+        level: 1,
+        originalTile: grid[y][x] // Store what was underneath
       });
       return true;
     }
@@ -288,6 +290,21 @@ export function useGameEngine(
 
   const getTurretAt = (x: number, y: number) => {
     return turretsRef.current.find(t => t.x === x && t.y === y);
+  };
+
+  const sellTurret = (x: number, y: number): TileType | null => {
+    const index = turretsRef.current.findIndex(t => t.x === x && t.y === y);
+    if (index !== -1) {
+      const turret = turretsRef.current[index];
+      // Refund 50% of base cost + 50% of upgrades
+      const totalValue = TURRET_COST + (turret.level - 1) * UPGRADE_COST;
+      const refund = Math.floor(totalValue * 0.5);
+      
+      setMoney(m => m + refund);
+      turretsRef.current.splice(index, 1);
+      return turret.originalTile;
+    }
+    return null;
   };
 
   const spawnEnemy = (startPos: {x: number, y: number}) => {
@@ -314,6 +331,7 @@ export function useGameEngine(
     stopGame,
     buildTurret,
     upgradeTurret,
-    getTurretAt
+    getTurretAt,
+    sellTurret
   };
 }

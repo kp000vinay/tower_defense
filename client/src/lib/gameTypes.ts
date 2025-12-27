@@ -56,6 +56,7 @@ export interface TurretEntity {
   lastFired: number;
   targetId: string | null;
   level: number;
+  originalTile: TileType;
 }
 
 export interface Projectile {
