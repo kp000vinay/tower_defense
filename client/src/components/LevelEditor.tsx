@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
+import { useGameEngine } from '@/hooks/useGameEngine';
+import { Enemy } from '@/lib/gameTypes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -15,6 +17,16 @@ export default function LevelEditor() {
   const [grid, setGrid] = useState<TileType[][]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [pathPreview, setPathPreview] = useState<{x: number, y: number}[] | null>(null);
+
+  const { 
+    gameState, 
+    enemies, 
+    wave, 
+    lives, 
+    money, 
+    startGame, 
+    stopGame 
+  } = useGameEngine(width, height, grid);
 
   // Initialize grid
   useEffect(() => {
@@ -111,12 +123,23 @@ export default function LevelEditor() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={clearGrid} className="text-destructive border-destructive/50 hover:bg-destructive/10">
-            <Trash2 className="w-4 h-4 mr-2" /> Purge
-          </Button>
-          <Button onClick={saveLevel} className="bg-primary text-primary-foreground hover:bg-primary/90 hazard-border">
-            <Save className="w-4 h-4 mr-2" /> Save Sector
-          </Button>
+          {gameState === 'editing' ? (
+            <>
+              <Button variant="outline" onClick={clearGrid} className="text-destructive border-destructive/50 hover:bg-destructive/10">
+                <Trash2 className="w-4 h-4 mr-2" /> Purge
+              </Button>
+              <Button onClick={saveLevel} className="bg-primary text-primary-foreground hover:bg-primary/90 hazard-border">
+                <Save className="w-4 h-4 mr-2" /> Save Sector
+              </Button>
+              <Button onClick={startGame} className="bg-green-600 text-white hover:bg-green-500 hazard-border ml-2">
+                <Play className="w-4 h-4 mr-2" /> ENGAGE
+              </Button>
+            </>
+          ) : (
+            <Button onClick={stopGame} variant="destructive" className="hazard-border">
+              ABORT MISSION
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -144,9 +167,10 @@ export default function LevelEditor() {
           </div>
 
           <div className="mt-auto p-4 bg-black/20 border border-white/5 rounded text-xs font-mono text-muted-foreground">
-            <p className="mb-2 text-primary">STATUS: ONLINE</p>
-            <p>GRID: {width}x{height}</p>
-            <p>TOOL: {selectedTool.toUpperCase()}</p>
+            <p className="mb-2 text-primary">STATUS: {gameState === 'playing' ? 'COMBAT ACTIVE' : 'EDITING'}</p>
+            <p>WAVE: {wave}</p>
+            <p>LIVES: {lives}</p>
+            <p>CREDITS: {money}</p>
           </div>
         </Card>
 
@@ -172,18 +196,25 @@ export default function LevelEditor() {
                 return (
                   <div
                     key={`${x}-${y}`}
-                    onMouseDown={() => { setIsDragging(true); handleTileClick(x, y); }}
-                    onMouseEnter={() => handleMouseEnter(x, y)}
+                    onMouseDown={() => { 
+                      if (gameState === 'editing') {
+                        setIsDragging(true); 
+                        handleTileClick(x, y); 
+                      }
+                    }}
+                    onMouseEnter={() => {
+                      if (gameState === 'editing') handleMouseEnter(x, y);
+                    }}
                     onMouseUp={() => setIsDragging(false)}
                     className={`
-                      w-10 h-10 cursor-pointer transition-colors duration-75 relative
+                      w-10 h-10 transition-colors duration-75 relative
                       ${TILE_COLORS[tileType]}
-                      hover:brightness-125
+                      ${gameState === 'editing' ? 'cursor-pointer hover:brightness-125' : ''}
                       border border-white/5
                     `}
                     title={`Coordinates: ${x},${y}`}
                   >
-                    {isPath && (
+                    {isPath && gameState === 'editing' && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <div className="w-2 h-2 bg-green-400 rounded-full shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse" />
                       </div>
@@ -191,6 +222,27 @@ export default function LevelEditor() {
                   </div>
                 );
               })
+            ))}
+            
+            {/* Render Enemies Layer */}
+            {enemies.map(enemy => (
+              <div
+                key={enemy.id}
+                className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-[0_0_10px_rgba(239,68,68,0.8)] z-20 pointer-events-none transition-transform will-change-transform"
+                style={{
+                  left: `${enemy.x * 2.5 + 0.5}rem`, // 2.5rem = w-10 (40px)
+                  top: `${enemy.y * 2.5 + 0.5}rem`,
+                  transform: 'translate(-50%, -50%)'
+                }}
+              >
+                {/* Health Bar */}
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/50 rounded overflow-hidden">
+                  <div 
+                    className="h-full bg-green-500" 
+                    style={{ width: `${(enemy.health / enemy.maxHealth) * 100}%` }}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         </Card>

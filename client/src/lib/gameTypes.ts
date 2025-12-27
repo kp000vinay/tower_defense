@@ -24,3 +24,23 @@ export const TILE_COLORS: Record<TileType, string> = {
 
 export const DEFAULT_WIDTH = 20;
 export const DEFAULT_HEIGHT = 12;
+
+export interface Enemy {
+  id: string;
+  x: number; // Float for smooth movement
+  y: number;
+  pathIndex: number; // The index of the *next* tile they are moving towards
+  speed: number;
+  health: number;
+  maxHealth: number;
+  frozen?: boolean;
+}
+
+export type GameState = 'editing' | 'playing' | 'paused' | 'gameover';
+
+export interface Wave {
+  count: number;
+  interval: number; // ms between spawns
+  enemyHealth: number;
+  enemySpeed: number;
+}
