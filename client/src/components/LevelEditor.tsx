@@ -7,13 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Save, Trash2, Play, Grid3X3, Download, Upload } from 'lucide-react';
+import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench } from 'lucide-react';
 
 export default function LevelEditor() {
   const [levelName, setLevelName] = useState('New Sector');
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
-  const [selectedTool, setSelectedTool] = useState<TileType | 'sell'>('wall');
+  const [selectedTool, setSelectedTool] = useState<TileType | 'sell' | 'repair'>('wall');
   // Initialize grid state with default values immediately to avoid undefined access
   const [grid, setGrid] = useState<TileType[][]>(() => 
     Array(DEFAULT_HEIGHT).fill(null).map(() => Array(DEFAULT_WIDTH).fill('empty'))
@@ -95,7 +95,7 @@ export default function LevelEditor() {
     }
 
     // Editor logic
-    if (selectedTool !== 'sell') {
+    if (selectedTool !== 'sell' && selectedTool !== 'repair') {
       const newGrid = [...grid];
       newGrid[y][x] = selectedTool;
       setGrid(newGrid);

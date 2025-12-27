@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, TURRET_COST, UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, TURRET_COST, UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -76,7 +76,9 @@ export function useGameEngine(
             lastFired: 0,
             targetId: null,
             level: 1,
-            originalTile: 'empty' // Default for pre-placed turrets
+            originalTile: 'empty', // Default for pre-placed turrets
+            health: TURRET_STATS.baseHealth,
+            maxHealth: TURRET_STATS.baseHealth
           });
         }
       }
@@ -204,14 +206,57 @@ export function useGameEngine(
           turret.targetId = target.id;
           
           // Spawn projectile
-          projectilesRef.current.push({
+          nextProjectiles.push({
             id: crypto.randomUUID(),
             x: turret.x,
             y: turret.y,
             targetId: target.id,
-            speed: 10,
-            damage: turret.damage
+            speed: 12,
+            damage: turret.damage,
+            source: 'turret'
           });
+        }
+      }
+    });
+
+    // Enemy Attack Logic (Tanks)
+    enemiesRef.current.forEach(enemy => {
+      if (enemy.type === 'tank') {
+        const now = Date.now();
+        // Initialize attack stats if missing
+        if (!enemy.attackCooldown) {
+          enemy.attackCooldown = 2000;
+          enemy.attackRange = 4;
+          enemy.attackDamage = 30;
+          enemy.lastFired = 0;
+        }
+
+        if (now - (enemy.lastFired || 0) >= enemy.attackCooldown!) {
+          // Find nearest turret
+          let targetTurret: TurretEntity | null = null;
+          let minDist = Infinity;
+
+          turretsRef.current.forEach(turret => {
+            const dist = Math.sqrt(Math.pow(turret.x - enemy.x, 2) + Math.pow(turret.y - enemy.y, 2));
+            if (dist <= enemy.attackRange! && dist < minDist) {
+              minDist = dist;
+              targetTurret = turret;
+            }
+          });
+
+          if (targetTurret) {
+            enemy.lastFired = now;
+            // Fire projectile at turret
+            projectilesRef.current.push({
+              id: crypto.randomUUID(),
+              x: enemy.x,
+              y: enemy.y,
+              targetId: (targetTurret as TurretEntity).id,
+              speed: 8,
+              damage: enemy.attackDamage!,
+              source: 'enemy'
+            });
+          }
         }
       }
     });
@@ -240,30 +285,65 @@ export function useGameEngine(
     };
 
     projectilesRef.current.forEach(proj => {
-      const target = nextEnemies.find(e => e.id === proj.targetId);
-      if (!target) return; // Target dead/gone
+      let targetX = 0;
+      let targetY = 0;
+      let hit = false;
 
-      const dx = target.x - proj.x;
-      const dy = target.y - proj.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      const moveDist = (proj.speed * deltaTime) / 1000;
+      if (proj.source === 'turret') {
+        const target = nextEnemies.find(e => e.id === proj.targetId);
+        if (!target) return; // Target dead/gone
+        targetX = target.x;
+        targetY = target.y;
 
-      if (dist <= moveDist) {
-        // Hit!
-        target.health -= proj.damage;
-        if (target.health <= 0) {
-          // Enemy killed
-          moneyEarned += target.reward;
-          spawnExplosion(target.x, target.y, ENEMY_STATS[target.type].color.replace('bg-', 'text-'), 12);
-          // Remove enemy from nextEnemies immediately so other projectiles don't target it
-          nextEnemies = nextEnemies.filter(e => e.id !== target.id);
+        const dx = targetX - proj.x;
+        const dy = targetY - proj.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const moveDist = proj.speed * (deltaTime / 1000);
+
+        if (dist <= moveDist) {
+          hit = true;
+          target.health -= proj.damage;
+          if (target.health <= 0) {
+            moneyEarned += target.reward;
+            spawnExplosion(target.x, target.y, ENEMY_STATS[target.type].color.replace('bg-', 'text-'), 12);
+            nextEnemies = nextEnemies.filter(e => e.id !== target.id);
+          }
+          spawnExplosion(proj.x, proj.y, 'text-yellow-400', 3);
+        } else {
+          proj.x += (dx / dist) * moveDist;
+          proj.y += (dy / dist) * moveDist;
         }
-        // Hit effect
-        spawnExplosion(proj.x, proj.y, 'text-yellow-400', 3);
       } else {
-        // Move projectile
-        proj.x += (dx / dist) * moveDist;
-        proj.y += (dy / dist) * moveDist;
+        // Enemy projectile targeting turret
+        const target = turretsRef.current.find(t => t.id === proj.targetId);
+        if (!target) return; // Turret destroyed
+        targetX = target.x;
+        targetY = target.y;
+
+        const dx = targetX - proj.x;
+        const dy = targetY - proj.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const moveDist = proj.speed * (deltaTime / 1000);
+
+        if (dist <= moveDist) {
+          hit = true;
+          target.health -= proj.damage;
+          spawnExplosion(proj.x, proj.y, 'text-blue-400', 5);
+          
+          if (target.health <= 0) {
+            // Turret destroyed!
+            spawnExplosion(target.x, target.y, 'text-orange-500', 20);
+            // Remove turret
+            const idx = turretsRef.current.findIndex(t => t.id === target.id);
+            if (idx !== -1) turretsRef.current.splice(idx, 1);
+          }
+        } else {
+          proj.x += (dx / dist) * moveDist;
+          proj.y += (dy / dist) * moveDist;
+        }
+      }
+
+      if (!hit) {
         nextProjectiles.push(proj);
       }
     });
@@ -319,7 +399,9 @@ export function useGameEngine(
         lastFired: 0,
         targetId: null,
         level: 1,
-        originalTile: grid[y][x] // Store what was underneath
+        originalTile: grid[y][x], // Store what was underneath
+        health: TURRET_STATS.baseHealth,
+        maxHealth: TURRET_STATS.baseHealth
       });
       return true;
     }
@@ -334,7 +416,32 @@ export function useGameEngine(
       turret.damage += 10;
       turret.range += 0.5;
       turret.cooldown = Math.max(100, turret.cooldown - 50);
+      turret.maxHealth += 50;
+      turret.health = turret.maxHealth; // Heal on upgrade
       return true;
+    }
+    return false;
+  };
+
+  const repairTurret = (x: number, y: number) => {
+    const turret = turretsRef.current.find(t => t.x === x && t.y === y);
+    if (turret && turret.health < turret.maxHealth) {
+      const missingHp = turret.maxHealth - turret.health;
+      const cost = Math.ceil(missingHp * TURRET_STATS.repairCostPerHp);
+      
+      if (money >= cost) {
+        setMoney(m => m - cost);
+        turret.health = turret.maxHealth;
+        return true;
+      } else {
+        // Partial repair
+        const affordableHp = Math.floor(money / TURRET_STATS.repairCostPerHp);
+        if (affordableHp > 0) {
+          setMoney(0);
+          turret.health += affordableHp;
+          return true;
+        }
+      }
     }
     return false;
   };
@@ -393,6 +500,7 @@ export function useGameEngine(
     upgradeTurret,
     getTurretAt,
     sellTurret,
+    repairTurret,
     highScore,
     particles
   };

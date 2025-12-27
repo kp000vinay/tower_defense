@@ -39,12 +39,21 @@ export interface Enemy {
   maxHealth: number;
   reward: number;
   frozen?: boolean;
+  lastFired?: number; // For enemies that shoot
+  attackRange?: number;
+  attackDamage?: number;
+  attackCooldown?: number;
 }
 
 export const ENEMY_STATS: Record<EnemyType, { health: number; speed: number; reward: number; color: string }> = {
   standard: { health: 100, speed: 2.5, reward: 10, color: 'bg-red-500' },
   scout: { health: 40, speed: 4.5, reward: 5, color: 'bg-yellow-400' },
   tank: { health: 300, speed: 1.2, reward: 25, color: 'bg-blue-600' },
+};
+
+export const TURRET_STATS = {
+  baseHealth: 200,
+  repairCostPerHp: 0.5, // 1 credit repairs 2 HP
 };
 
 export type GameState = 'editing' | 'playing' | 'paused' | 'gameover';
@@ -66,15 +75,18 @@ export interface TurretEntity {
   targetId: string | null;
   level: number;
   originalTile: TileType;
+  health: number;
+  maxHealth: number;
 }
 
 export interface Projectile {
   id: string;
   x: number;
   y: number;
-  targetId: string;
+  targetId: string; // Can be enemy ID or turret ID
   speed: number;
   damage: number;
+  source: 'turret' | 'enemy';
 }
 
 export interface Particle {
