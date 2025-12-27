@@ -1,4 +1,4 @@
-export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn';
+export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret';
 
 export interface Tile {
   x: number;
@@ -20,6 +20,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   wall: 'bg-slate-800',
   base: 'bg-blue-600',
   spawn: 'bg-red-600',
+  turret: 'bg-yellow-500',
 };
 
 export const DEFAULT_WIDTH = 20;
@@ -44,3 +45,26 @@ export interface Wave {
   enemyHealth: number;
   enemySpeed: number;
 }
+
+export interface TurretEntity {
+  id: string;
+  x: number;
+  y: number;
+  range: number;
+  damage: number;
+  cooldown: number;
+  lastFired: number;
+  targetId: string | null;
+}
+
+export interface Projectile {
+  id: string;
+  x: number;
+  y: number;
+  targetId: string;
+  speed: number;
+  damage: number;
+}
+
+export const TURRET_COST = 50;
+export const KILL_REWARD = 10;

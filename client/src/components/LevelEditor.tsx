@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS } from '@/lib/gameTypes';
+import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
 import { Enemy } from '@/lib/gameTypes';
@@ -37,11 +37,29 @@ export default function LevelEditor() {
     wave, 
     lives, 
     money, 
+    projectiles,
     startGame, 
-    stopGame 
+    stopGame,
+    buildTurret
   } = useGameEngine(width, height, grid);
 
   const handleTileClick = (x: number, y: number) => {
+    if (gameState === 'playing') {
+      // In-game building logic
+      if (selectedTool === 'turret' && grid[y][x] === 'empty') {
+        if (buildTurret(x, y)) {
+          const newGrid = [...grid];
+          newGrid[y][x] = 'turret';
+          setGrid(newGrid);
+          toast.success('Turret deployed!');
+        } else {
+          toast.error('Insufficient credits!');
+        }
+      }
+      return;
+    }
+
+    // Editor logic
     const newGrid = [...grid];
     newGrid[y][x] = selectedTool;
     setGrid(newGrid);
@@ -156,19 +174,22 @@ export default function LevelEditor() {
           <h3 className="text-lg font-bold text-primary border-b border-primary/30 pb-2">Construction</h3>
           
           <div className="grid grid-cols-2 gap-2">
-            {(['empty', 'wall', 'path', 'base', 'spawn'] as TileType[]).map((type) => (
+            {(['empty', 'wall', 'path', 'base', 'spawn', 'turret'] as TileType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => setSelectedTool(type)}
+                disabled={gameState === 'playing' && type !== 'turret'}
                 className={`
                   p-3 flex flex-col items-center justify-center gap-2 border transition-all
                   ${selectedTool === type 
                     ? 'border-primary bg-primary/10 shadow-[0_0_10px_rgba(var(--primary),0.3)]' 
                     : 'border-border hover:border-primary/50 hover:bg-accent/5'}
+                  ${gameState === 'playing' && type !== 'turret' ? 'opacity-30 cursor-not-allowed' : ''}
                 `}
               >
                 <div className={`w-8 h-8 ${TILE_COLORS[type]} border border-white/10 shadow-inner`} />
                 <span className="text-xs uppercase font-mono tracking-wider">{type}</span>
+                {type === 'turret' && <span className="text-[10px] text-yellow-500 font-bold">{TURRET_COST} CR</span>}
               </button>
             ))}
           </div>
@@ -207,6 +228,8 @@ export default function LevelEditor() {
                       if (gameState === 'editing') {
                         setIsDragging(true); 
                         handleTileClick(x, y); 
+                      } else if (gameState === 'playing' && selectedTool === 'turret') {
+                        handleTileClick(x, y);
                       }
                     }}
                     onMouseEnter={() => {
@@ -250,6 +273,19 @@ export default function LevelEditor() {
                   />
                 </div>
               </div>
+            ))}
+
+            {/* Render Projectiles Layer */}
+            {projectiles.map(proj => (
+              <div
+                key={proj.id}
+                className="absolute w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.8)] z-30 pointer-events-none will-change-transform"
+                style={{
+                  left: `${proj.x * 2.5 + 0.5}rem`,
+                  top: `${proj.y * 2.5 + 0.5}rem`,
+                  transform: 'translate(-50%, -50%)'
+                }}
+              />
             ))}
           </div>
         </Card>

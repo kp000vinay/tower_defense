@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, TURRET_COST, KILL_REWARD } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -12,12 +12,15 @@ export function useGameEngine(
 ) {
   const [gameState, setGameState] = useState<GameState>('editing');
   const [enemies, setEnemies] = useState<Enemy[]>([]);
+  const [projectiles, setProjectiles] = useState<Projectile[]>([]);
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(20);
   const [money, setMoney] = useState(100);
   
   // Refs for mutable state in game loop
   const enemiesRef = useRef<Enemy[]>([]);
+  const turretsRef = useRef<TurretEntity[]>([]);
+  const projectilesRef = useRef<Projectile[]>([]);
   const pathRef = useRef<{x: number, y: number}[] | null>(null);
   const frameRef = useRef<number>(0);
   const lastTickRef = useRef<number>(0);
@@ -57,12 +60,33 @@ export function useGameEngine(
     setMoney(100);
     setWave(1);
     setEnemies([]);
+    setProjectiles([]);
     enemiesRef.current = [];
+    projectilesRef.current = [];
+    
+    // Initialize turrets from grid
+    turretsRef.current = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (grid[y][x] === 'turret') {
+          turretsRef.current.push({
+            id: crypto.randomUUID(),
+            x,
+            y,
+            range: 3.5,
+            damage: 20,
+            cooldown: 800, // ms
+            lastFired: 0,
+            targetId: null
+          });
+        }
+      }
+    }
     
     // Setup first wave
     enemiesToSpawnRef.current = 5;
     spawnTimerRef.current = 0;
-  }, []);
+  }, [grid, width, height]);
 
   const stopGame = useCallback(() => {
     setGameState('editing');
@@ -116,7 +140,7 @@ export function useGameEngine(
     }
 
     // Move Enemies
-    const nextEnemies: Enemy[] = [];
+    let nextEnemies: Enemy[] = [];
     let livesLost = 0;
 
     enemiesRef.current.forEach(enemy => {
@@ -124,7 +148,6 @@ export function useGameEngine(
       const targetNode = path[enemy.pathIndex];
       
       if (!targetNode) {
-        // Reached end
         livesLost++;
         return; 
       }
@@ -133,27 +156,81 @@ export function useGameEngine(
       const dy = targetNode.y - enemy.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
       
-      // Speed factor (tiles per second)
       const moveDist = (enemy.speed * deltaTime) / 1000;
 
       if (dist <= moveDist) {
-        // Reached node, snap to it and increment index
         enemy.x = targetNode.x;
         enemy.y = targetNode.y;
         enemy.pathIndex++;
         
-        // Check if reached base (end of path)
         if (enemy.pathIndex >= path.length) {
           livesLost++;
-          return; // Remove enemy
+          return; 
         }
       } else {
-        // Move towards node
         enemy.x += (dx / dist) * moveDist;
         enemy.y += (dy / dist) * moveDist;
       }
 
       nextEnemies.push(enemy);
+    });
+
+    // Turret Logic
+    const now = performance.now();
+    turretsRef.current.forEach(turret => {
+      if (now - turret.lastFired >= turret.cooldown) {
+        // Find target
+        const target = nextEnemies.find(e => {
+          const dx = e.x - turret.x;
+          const dy = e.y - turret.y;
+          return Math.sqrt(dx*dx + dy*dy) <= turret.range;
+        });
+
+        if (target) {
+          turret.lastFired = now;
+          turret.targetId = target.id;
+          
+          // Spawn projectile
+          projectilesRef.current.push({
+            id: crypto.randomUUID(),
+            x: turret.x,
+            y: turret.y,
+            targetId: target.id,
+            speed: 10,
+            damage: turret.damage
+          });
+        }
+      }
+    });
+
+    // Projectile Logic
+    const nextProjectiles: Projectile[] = [];
+    let moneyEarned = 0;
+
+    projectilesRef.current.forEach(proj => {
+      const target = nextEnemies.find(e => e.id === proj.targetId);
+      if (!target) return; // Target dead/gone
+
+      const dx = target.x - proj.x;
+      const dy = target.y - proj.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const moveDist = (proj.speed * deltaTime) / 1000;
+
+      if (dist <= moveDist) {
+        // Hit!
+        target.health -= proj.damage;
+        if (target.health <= 0) {
+          // Enemy killed
+          moneyEarned += KILL_REWARD;
+          // Remove enemy from nextEnemies immediately so other projectiles don't target it
+          nextEnemies = nextEnemies.filter(e => e.id !== target.id);
+        }
+      } else {
+        // Move projectile
+        proj.x += (dx / dist) * moveDist;
+        proj.y += (dy / dist) * moveDist;
+        nextProjectiles.push(proj);
+      }
     });
 
     if (livesLost > 0) {
@@ -164,8 +241,34 @@ export function useGameEngine(
       });
     }
 
+    if (moneyEarned > 0) {
+      setMoney(m => m + moneyEarned);
+    }
+
     enemiesRef.current = nextEnemies;
-    setEnemies([...nextEnemies]); // Trigger render
+    projectilesRef.current = nextProjectiles;
+    
+    setEnemies([...nextEnemies]);
+    setProjectiles([...nextProjectiles]);
+  };
+
+  const buildTurret = (x: number, y: number) => {
+    if (money >= TURRET_COST) {
+      setMoney(m => m - TURRET_COST);
+      // Add to ref immediately for gameplay
+      turretsRef.current.push({
+        id: crypto.randomUUID(),
+        x,
+        y,
+        range: 3.5,
+        damage: 20,
+        cooldown: 800,
+        lastFired: 0,
+        targetId: null
+      });
+      return true;
+    }
+    return false;
   };
 
   const spawnEnemy = (startPos: {x: number, y: number}) => {
@@ -187,7 +290,9 @@ export function useGameEngine(
     wave,
     lives,
     money,
+    projectiles,
     startGame,
-    stopGame
+    stopGame,
+    buildTurret
   };
 }
