@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST } from '@/lib/gameTypes';
+import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, UPGRADE_COST } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
 import { Enemy } from '@/lib/gameTypes';
@@ -40,20 +40,34 @@ export default function LevelEditor() {
     projectiles,
     startGame, 
     stopGame,
-    buildTurret
+    buildTurret,
+    upgradeTurret,
+    getTurretAt
   } = useGameEngine(width, height, grid);
 
   const handleTileClick = (x: number, y: number) => {
     if (gameState === 'playing') {
       // In-game building logic
-      if (selectedTool === 'turret' && (grid[y][x] === 'empty' || grid[y][x] === 'wall')) {
-        if (buildTurret(x, y)) {
-          const newGrid = [...grid];
-          newGrid[y][x] = 'turret';
-          setGrid(newGrid);
-          toast.success('Turret deployed!');
-        } else {
-          toast.error('Insufficient credits!');
+      if (selectedTool === 'turret') {
+        if (grid[y][x] === 'empty' || grid[y][x] === 'wall') {
+          if (buildTurret(x, y)) {
+            const newGrid = [...grid];
+            newGrid[y][x] = 'turret';
+            setGrid(newGrid);
+            toast.success('Turret deployed!');
+          } else {
+            toast.error('Insufficient credits!');
+          }
+        } else if (grid[y][x] === 'turret') {
+          // Upgrade logic
+          if (upgradeTurret(x, y)) {
+            toast.success('Turret upgraded!');
+          } else {
+            const turret = getTurretAt(x, y);
+            if (turret) {
+              toast.info(`Level ${turret.level} Turret (Upgrade: ${UPGRADE_COST} CR)`);
+            }
+          }
         }
       }
       return;
@@ -192,6 +206,13 @@ export default function LevelEditor() {
                 {type === 'turret' && <span className="text-[10px] text-yellow-500 font-bold">{TURRET_COST} CR</span>}
               </button>
             ))}
+            {gameState === 'playing' && (
+              <div className="col-span-2 mt-2 p-2 bg-primary/10 border border-primary/30 rounded text-xs text-center">
+                <p className="text-primary font-bold mb-1">UPGRADE SYSTEM</p>
+                <p className="text-muted-foreground">Click existing turret to upgrade</p>
+                <p className="text-yellow-500 font-mono">{UPGRADE_COST} CR</p>
+              </div>
+            )}
           </div>
 
           <div className="mt-auto p-4 bg-black/20 border border-white/5 rounded text-xs font-mono text-muted-foreground">
@@ -239,11 +260,16 @@ export default function LevelEditor() {
                     className={`
                       w-10 h-10 transition-colors duration-75 relative
                       ${TILE_COLORS[tileType]}
-                      ${gameState === 'editing' ? 'cursor-pointer hover:brightness-125' : ''}
+                      ${gameState === 'editing' || (gameState === 'playing' && (tileType === 'empty' || tileType === 'wall' || tileType === 'turret')) ? 'cursor-pointer hover:brightness-125' : ''}
                       border border-white/5
                     `}
                     title={`Coordinates: ${x},${y}`}
                   >
+                    {tileType === 'turret' && gameState === 'playing' && (
+                      <div className="absolute top-0 right-0 text-[8px] font-bold text-black bg-yellow-500 px-1 rounded-bl">
+                        {getTurretAt(x, y)?.level || 1}
+                      </div>
+                    )}
                     {isPath && gameState === 'editing' && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <div className="w-2 h-2 bg-green-400 rounded-full shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse" />

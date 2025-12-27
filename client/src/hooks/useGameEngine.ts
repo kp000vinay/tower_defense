@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, TURRET_COST, KILL_REWARD } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, TURRET_COST, UPGRADE_COST, KILL_REWARD } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -77,7 +77,8 @@ export function useGameEngine(
             damage: 20,
             cooldown: 800, // ms
             lastFired: 0,
-            targetId: null
+            targetId: null,
+            level: 1
           });
         }
       }
@@ -264,11 +265,29 @@ export function useGameEngine(
         damage: 20,
         cooldown: 800,
         lastFired: 0,
-        targetId: null
+        targetId: null,
+        level: 1
       });
       return true;
     }
     return false;
+  };
+
+  const upgradeTurret = (x: number, y: number) => {
+    const turret = turretsRef.current.find(t => t.x === x && t.y === y);
+    if (turret && money >= UPGRADE_COST) {
+      setMoney(m => m - UPGRADE_COST);
+      turret.level += 1;
+      turret.damage += 10;
+      turret.range += 0.5;
+      turret.cooldown = Math.max(100, turret.cooldown - 50);
+      return true;
+    }
+    return false;
+  };
+
+  const getTurretAt = (x: number, y: number) => {
+    return turretsRef.current.find(t => t.x === x && t.y === y);
   };
 
   const spawnEnemy = (startPos: {x: number, y: number}) => {
@@ -293,6 +312,8 @@ export function useGameEngine(
     projectiles,
     startGame,
     stopGame,
-    buildTurret
+    buildTurret,
+    upgradeTurret,
+    getTurretAt
   };
 }

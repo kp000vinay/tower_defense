@@ -55,6 +55,7 @@ export interface TurretEntity {
   cooldown: number;
   lastFired: number;
   targetId: string | null;
+  level: number;
 }
 
 export interface Projectile {
@@ -67,4 +68,5 @@ export interface Projectile {
 }
 
 export const TURRET_COST = 50;
+export const UPGRADE_COST = 75;
 export const KILL_REWARD = 10;
