@@ -46,7 +46,7 @@ export default function LevelEditor() {
   const handleTileClick = (x: number, y: number) => {
     if (gameState === 'playing') {
       // In-game building logic
-      if (selectedTool === 'turret' && grid[y][x] === 'empty') {
+      if (selectedTool === 'turret' && (grid[y][x] === 'empty' || grid[y][x] === 'wall')) {
         if (buildTurret(x, y)) {
           const newGrid = [...grid];
           newGrid[y][x] = 'turret';
