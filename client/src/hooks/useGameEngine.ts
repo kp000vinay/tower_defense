@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, TURRET_COST, UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, TURRET_COST, UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -14,6 +14,7 @@ export function useGameEngine(
   const [gameState, setGameState] = useState<GameState>('editing');
   const [enemies, setEnemies] = useState<Enemy[]>([]);
   const [projectiles, setProjectiles] = useState<Projectile[]>([]);
+  const [particles, setParticles] = useState<Particle[]>([]);
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(20);
   const [money, setMoney] = useState(100);
@@ -34,6 +35,7 @@ export function useGameEngine(
   const enemiesRef = useRef<Enemy[]>([]);
   const turretsRef = useRef<TurretEntity[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
   const pathRef = useRef<{x: number, y: number}[] | null>(null);
   const frameRef = useRef<number>(0);
   const lastTickRef = useRef<number>(0);
@@ -218,6 +220,25 @@ export function useGameEngine(
     const nextProjectiles: Projectile[] = [];
     let moneyEarned = 0;
 
+    // Spawn explosion particles
+    const spawnExplosion = (x: number, y: number, color: string, count: number) => {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 5 + 2;
+        particlesRef.current.push({
+          id: crypto.randomUUID(),
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0,
+          maxLife: Math.random() * 0.3 + 0.2, // 0.2-0.5s lifetime
+          color,
+          size: Math.random() * 0.15 + 0.05
+        });
+      }
+    };
+
     projectilesRef.current.forEach(proj => {
       const target = nextEnemies.find(e => e.id === proj.targetId);
       if (!target) return; // Target dead/gone
@@ -233,9 +254,12 @@ export function useGameEngine(
         if (target.health <= 0) {
           // Enemy killed
           moneyEarned += target.reward;
+          spawnExplosion(target.x, target.y, ENEMY_STATS[target.type].color.replace('bg-', 'text-'), 12);
           // Remove enemy from nextEnemies immediately so other projectiles don't target it
           nextEnemies = nextEnemies.filter(e => e.id !== target.id);
         }
+        // Hit effect
+        spawnExplosion(proj.x, proj.y, 'text-yellow-400', 3);
       } else {
         // Move projectile
         proj.x += (dx / dist) * moveDist;
@@ -263,11 +287,22 @@ export function useGameEngine(
       setMoney(m => m + moneyEarned);
     }
 
+    // Update Particles
+    const nextParticles: Particle[] = [];
+    particlesRef.current.forEach(p => {
+      p.x += p.vx * (deltaTime / 1000);
+      p.y += p.vy * (deltaTime / 1000);
+      p.life -= deltaTime / 1000 / p.maxLife;
+      if (p.life > 0) nextParticles.push(p);
+    });
+    particlesRef.current = nextParticles;
+
     enemiesRef.current = nextEnemies;
     projectilesRef.current = nextProjectiles;
     
     setEnemies([...nextEnemies]);
     setProjectiles([...nextProjectiles]);
+    setParticles([...nextParticles]);
   };
 
   const buildTurret = (x: number, y: number) => {
@@ -358,6 +393,7 @@ export function useGameEngine(
     upgradeTurret,
     getTurretAt,
     sellTurret,
-    highScore
+    highScore,
+    particles
   };
 }

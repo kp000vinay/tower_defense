@@ -44,7 +44,8 @@ export default function LevelEditor() {
     upgradeTurret,
     getTurretAt,
     sellTurret,
-    highScore
+    highScore,
+    particles
   } = useGameEngine(width, height, grid, pathPreview);
   
   const handleTileClick = (x: number, y: number) => {
@@ -400,16 +401,32 @@ export default function LevelEditor() {
                 
                 {/* Render Projectiles Layer */}
                 {projectiles.map(proj => (
-              <div
-                key={proj.id}
-                className="absolute w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.8)] z-30 pointer-events-none will-change-transform"
-                style={{
-                  left: `${proj.x * 2.5 + 0.5}rem`,
-                  top: `${proj.y * 2.5 + 0.5}rem`,
-                  transform: 'translate(-50%, -50%)'
-                }}
-              />
-            ))}
+                  <div
+                    key={proj.id}
+                    className="absolute w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.8)] z-30 pointer-events-none will-change-transform"
+                    style={{
+                      left: `calc(${proj.x} * 100% / ${width} + 50% / ${width})`,
+                      top: `calc(${proj.y} * 100% / ${height} + 50% / ${height})`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                  />
+                ))}
+
+                {/* Render Particles Layer */}
+                {particles.map(p => (
+                  <div
+                    key={p.id}
+                    className={`absolute rounded-full z-40 pointer-events-none will-change-transform ${p.color}`}
+                    style={{
+                      left: `calc(${p.x} * 100% / ${width} + 50% / ${width})`,
+                      top: `calc(${p.y} * 100% / ${height} + 50% / ${height})`,
+                      width: `${p.size}rem`,
+                      height: `${p.size}rem`,
+                      opacity: p.life,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                  />
+                ))}
           </div>
         </Card>
       </div>

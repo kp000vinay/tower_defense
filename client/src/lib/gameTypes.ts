@@ -77,6 +77,18 @@ export interface Projectile {
   damage: number;
 }
 
+export interface Particle {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number; // 0 to 1
+  maxLife: number;
+  color: string;
+  size: number;
+}
+
 export const TURRET_COST = 50;
 export const UPGRADE_COST = 75;
 export const KILL_REWARD = 10;
