@@ -50,13 +50,18 @@ export default function LevelEditor() {
     if (gameState === 'playing') {
       // In-game building logic
       if (selectedTool === 'sell') {
-        if (grid[y][x] === 'turret') {
+        // Check if there is a turret at this location using the engine's data
+        const turret = getTurretAt(x, y);
+        if (turret) {
+          const refundAmount = Math.floor((TURRET_COST + (turret.level - 1) * UPGRADE_COST) * 0.5);
           const originalTile = sellTurret(x, y);
+          
+          // Force update grid visual if engine confirms sale
           if (originalTile) {
             const newGrid = [...grid];
             newGrid[y][x] = originalTile;
             setGrid(newGrid);
-            toast.success('Turret recycled!');
+            toast.success(`Turret recycled! +${refundAmount} CR`);
           }
         }
         return;
@@ -252,9 +257,23 @@ export default function LevelEditor() {
 
           <div className="mt-auto p-4 bg-black/20 border border-white/5 rounded text-xs font-mono text-muted-foreground">
             <p className="mb-2 text-primary">STATUS: {gameState === 'playing' ? 'COMBAT ACTIVE' : 'EDITING'}</p>
-            <p>WAVE: {wave}</p>
-            <p>LIVES: {lives}</p>
-            <p>CREDITS: {money}</p>
+            
+            {/* Large Credit Display */}
+            <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded text-center">
+              <span className="block text-[10px] text-yellow-500/70 uppercase tracking-widest mb-1">Available Credits</span>
+              <span className="text-2xl font-bold text-yellow-400">{money} CR</span>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span>WAVE:</span>
+                <span className="text-white">{wave}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>LIVES:</span>
+                <span className="text-red-400">{lives}</span>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -302,9 +321,19 @@ export default function LevelEditor() {
                     title={`Coordinates: ${x},${y}`}
                   >
                     {tileType === 'turret' && gameState === 'playing' && (
-                      <div className="absolute top-0 right-0 text-[8px] font-bold text-black bg-yellow-500 px-1 rounded-bl">
-                        {getTurretAt(x, y)?.level || 1}
-                      </div>
+                      <>
+                        <div className="absolute top-0 right-0 text-[8px] font-bold text-black bg-yellow-500 px-1 rounded-bl z-10">
+                          LVL {getTurretAt(x, y)?.level || 1}
+                        </div>
+                        {/* Sell Preview Tooltip */}
+                        {selectedTool === 'sell' && (
+                          <div className="absolute inset-0 bg-red-500/30 flex items-center justify-center z-20 group">
+                            <span className="text-[8px] font-bold text-white bg-black/80 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                              +{Math.floor((TURRET_COST + ((getTurretAt(x, y)?.level || 1) - 1) * UPGRADE_COST) * 0.5)}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
                     {isPath && gameState === 'editing' && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
