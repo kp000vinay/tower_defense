@@ -14,9 +14,22 @@ export default function LevelEditor() {
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
   const [selectedTool, setSelectedTool] = useState<TileType>('wall');
-  const [grid, setGrid] = useState<TileType[][]>([]);
+  // Initialize grid state with default values immediately to avoid undefined access
+  const [grid, setGrid] = useState<TileType[][]>(() => 
+    Array(DEFAULT_HEIGHT).fill(null).map(() => Array(DEFAULT_WIDTH).fill('empty'))
+  );
   const [isDragging, setIsDragging] = useState(false);
   const [pathPreview, setPathPreview] = useState<{x: number, y: number}[] | null>(null);
+
+  // Update grid when dimensions change
+  useEffect(() => {
+    setGrid(prev => {
+      // If dimensions match, don't reset (preserves data if we just re-mounted)
+      if (prev.length === height && prev[0]?.length === width) return prev;
+      
+      return Array(height).fill(null).map(() => Array(width).fill('empty'));
+    });
+  }, [width, height]);
 
   const { 
     gameState, 
@@ -27,12 +40,6 @@ export default function LevelEditor() {
     startGame, 
     stopGame 
   } = useGameEngine(width, height, grid);
-
-  // Initialize grid
-  useEffect(() => {
-    const newGrid = Array(height).fill(null).map(() => Array(width).fill('empty'));
-    setGrid(newGrid);
-  }, [width, height]);
 
   const handleTileClick = (x: number, y: number) => {
     const newGrid = [...grid];

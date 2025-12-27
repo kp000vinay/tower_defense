@@ -26,13 +26,17 @@ export function useGameEngine(
   
   // Initialize path when grid changes or game starts
   useEffect(() => {
+    if (!grid || grid.length === 0 || grid.length !== height || grid[0].length !== width) {
+      return;
+    }
+
     let spawnPoint = null;
     let basePoint = null;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (grid[y][x] === 'spawn') spawnPoint = { x, y };
-        if (grid[y][x] === 'base') basePoint = { x, y };
+        if (grid[y] && grid[y][x] === 'spawn') spawnPoint = { x, y };
+        if (grid[y] && grid[y][x] === 'base') basePoint = { x, y };
       }
     }
 
