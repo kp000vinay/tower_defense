@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS } from '@/lib/gameTypes';
+import { findPath } from '@/lib/pathfinding';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -13,6 +14,7 @@ export default function LevelEditor() {
   const [selectedTool, setSelectedTool] = useState<TileType>('wall');
   const [grid, setGrid] = useState<TileType[][]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [pathPreview, setPathPreview] = useState<{x: number, y: number}[] | null>(null);
 
   // Initialize grid
   useEffect(() => {
@@ -24,6 +26,27 @@ export default function LevelEditor() {
     const newGrid = [...grid];
     newGrid[y][x] = selectedTool;
     setGrid(newGrid);
+    updatePathPreview(newGrid);
+  };
+
+  const updatePathPreview = (currentGrid: TileType[][]) => {
+    // Find spawn and base
+    let spawnPoint = null;
+    let basePoint = null;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (currentGrid[y][x] === 'spawn') spawnPoint = { x, y };
+        if (currentGrid[y][x] === 'base') basePoint = { x, y };
+      }
+    }
+
+    if (spawnPoint && basePoint) {
+      const path = findPath(currentGrid, spawnPoint, basePoint, width, height);
+      setPathPreview(path);
+    } else {
+      setPathPreview(null);
+    }
   };
 
   const handleMouseEnter = (x: number, y: number) => {
@@ -144,21 +167,30 @@ export default function LevelEditor() {
             onMouseLeave={() => setIsDragging(false)}
           >
             {grid.map((row, y) => (
-              row.map((tileType, x) => (
-                <div
-                  key={`${x}-${y}`}
-                  onMouseDown={() => { setIsDragging(true); handleTileClick(x, y); }}
-                  onMouseEnter={() => handleMouseEnter(x, y)}
-                  onMouseUp={() => setIsDragging(false)}
-                  className={`
-                    w-10 h-10 cursor-pointer transition-colors duration-75
-                    ${TILE_COLORS[tileType]}
-                    hover:brightness-125
-                    border border-white/5
-                  `}
-                  title={`Coordinates: ${x},${y}`}
-                />
-              ))
+              row.map((tileType, x) => {
+                const isPath = pathPreview?.some(p => p.x === x && p.y === y);
+                return (
+                  <div
+                    key={`${x}-${y}`}
+                    onMouseDown={() => { setIsDragging(true); handleTileClick(x, y); }}
+                    onMouseEnter={() => handleMouseEnter(x, y)}
+                    onMouseUp={() => setIsDragging(false)}
+                    className={`
+                      w-10 h-10 cursor-pointer transition-colors duration-75 relative
+                      ${TILE_COLORS[tileType]}
+                      hover:brightness-125
+                      border border-white/5
+                    `}
+                    title={`Coordinates: ${x},${y}`}
+                  >
+                    {isPath && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-2 h-2 bg-green-400 rounded-full shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             ))}
           </div>
         </Card>
