@@ -43,9 +43,10 @@ export default function LevelEditor() {
     buildTurret,
     upgradeTurret,
     getTurretAt,
-    sellTurret
-  } = useGameEngine(width, height, grid);
-
+    sellTurret,
+    highScore
+  } = useGameEngine(width, height, grid, pathPreview);
+  
   const handleTileClick = (x: number, y: number) => {
     if (gameState === 'playing') {
       // In-game building logic
@@ -273,12 +274,36 @@ export default function LevelEditor() {
                 <span>LIVES:</span>
                 <span className="text-red-400">{lives}</span>
               </div>
+              <div className="flex justify-between border-t border-white/10 pt-2 mt-2">
+                <span className="text-xs text-slate-400">HIGH SCORE:</span>
+                <span className="text-xs text-yellow-400">WAVE {highScore}</span>
+              </div>
             </div>
           </div>
         </Card>
 
         {/* Grid Canvas */}
         <Card className="flex-1 p-8 panel overflow-auto flex items-center justify-center bg-black/40 relative">
+          {/* Game Over Overlay */}
+          {gameState === 'gameover' && (
+            <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-500">
+              <h2 className="text-6xl font-bold text-red-500 mb-4 tracking-widest glitch-text">MISSION FAILED</h2>
+              <div className="text-2xl text-blue-400 mb-8 font-mono">
+                WAVES SURVIVED: <span className="text-white">{wave}</span>
+              </div>
+              {wave >= highScore && wave > 1 && (
+                <div className="text-xl text-yellow-400 mb-8 animate-pulse">
+                  NEW HIGH SCORE!
+                </div>
+              )}
+              <Button 
+                onClick={stopGame}
+                className="bg-red-600 hover:bg-red-700 text-white px-8 py-6 text-xl rounded-none border border-red-400"
+              >
+                RETURN TO BASE
+              </Button>
+            </div>
+          )}
           {/* Grid Background Effect */}
           <div className="absolute inset-0 pointer-events-none opacity-10" 
                style={{ backgroundImage: 'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)', backgroundSize: '40px 40px' }} 

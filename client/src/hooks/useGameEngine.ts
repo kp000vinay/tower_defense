@@ -8,7 +8,8 @@ const TICK_MS = 1000 / TICK_RATE;
 export function useGameEngine(
   width: number, 
   height: number, 
-  grid: TileType[][]
+  grid: TileType[][],
+  pathPreview: {x: number, y: number}[] | null
 ) {
   const [gameState, setGameState] = useState<GameState>('editing');
   const [enemies, setEnemies] = useState<Enemy[]>([]);
@@ -16,11 +17,18 @@ export function useGameEngine(
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(20);
   const [money, setMoney] = useState(100);
+  const [highScore, setHighScore] = useState(0);
   const [currentWave, setCurrentWave] = useState<Wave>({
     count: 5,
     interval: 1500,
     types: ['standard']
   });
+
+  // Load high score on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('std-highscore');
+    if (saved) setHighScore(parseInt(saved));
+  }, []);
   
   // Refs for mutable state in game loop
   const enemiesRef = useRef<Enemy[]>([]);
@@ -32,28 +40,10 @@ export function useGameEngine(
   const spawnTimerRef = useRef<number>(0);
   const enemiesToSpawnRef = useRef<number>(0);
   
-  // Initialize path when grid changes or game starts
+  // Initialize path when pathPreview changes
   useEffect(() => {
-    if (!grid || grid.length === 0 || grid.length !== height || grid[0].length !== width) {
-      return;
-    }
-
-    let spawnPoint = null;
-    let basePoint = null;
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (grid[y] && grid[y][x] === 'spawn') spawnPoint = { x, y };
-        if (grid[y] && grid[y][x] === 'base') basePoint = { x, y };
-      }
-    }
-
-    if (spawnPoint && basePoint) {
-      pathRef.current = findPath(grid, spawnPoint, basePoint, width, height);
-    } else {
-      pathRef.current = null;
-    }
-  }, [grid, width, height]);
+    pathRef.current = pathPreview;
+  }, [pathPreview]);
 
   const startGame = useCallback(() => {
     if (!pathRef.current) {
@@ -257,7 +247,14 @@ export function useGameEngine(
     if (livesLost > 0) {
       setLives(l => {
         const newLives = l - livesLost;
-        if (newLives <= 0) setGameState('gameover');
+        if (newLives <= 0) {
+          setGameState('gameover');
+          // Update high score
+          if (wave > highScore) {
+            setHighScore(wave);
+            localStorage.setItem('std-highscore', wave.toString());
+          }
+        }
         return newLives;
       });
     }
@@ -360,6 +357,7 @@ export function useGameEngine(
     buildTurret,
     upgradeTurret,
     getTurretAt,
-    sellTurret
+    sellTurret,
+    highScore
   };
 }
