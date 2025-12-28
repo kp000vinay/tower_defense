@@ -1,4 +1,4 @@
-export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper';
+export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper' | 'rubble';
 
 export interface Tile {
   x: number;
@@ -22,6 +22,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   spawn: 'bg-red-600',
   turret: 'bg-yellow-500',
   sniper: 'bg-purple-500',
+  rubble: 'bg-stone-600',
 };
 
 export const DEFAULT_WIDTH = 20;

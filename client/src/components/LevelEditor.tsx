@@ -20,6 +20,7 @@ export default function LevelEditor() {
   );
   const [isDragging, setIsDragging] = useState(false);
   const [pathPreview, setPathPreview] = useState<{x: number, y: number}[] | null>(null);
+  const [selectedTurret, setSelectedTurret] = useState<{x: number, y: number} | null>(null);
 
   // Update grid when dimensions change
   useEffect(() => {
@@ -50,7 +51,8 @@ export default function LevelEditor() {
   } = useGameEngine(width, height, grid, pathPreview, (x, y, originalTile) => {
     setGrid(prev => {
       const newGrid = [...prev];
-      newGrid[y][x] = originalTile;
+      // Set to rubble instead of restoring original tile
+      newGrid[y][x] = 'rubble';
       return newGrid;
     });
   });
@@ -93,6 +95,13 @@ export default function LevelEditor() {
       }
 
       if (selectedTool === 'turret' || selectedTool === 'sniper') {
+        // Handle selection for range display
+        if (grid[y][x] === 'turret' || grid[y][x] === 'sniper') {
+          setSelectedTurret({ x, y });
+        } else {
+          setSelectedTurret(null);
+        }
+
         if (grid[y][x] === 'empty' || grid[y][x] === 'wall') {
           if (buildTurret(x, y, selectedTool === 'sniper' ? 'sniper' : 'standard')) {
             const newGrid = [...grid];
@@ -448,6 +457,38 @@ export default function LevelEditor() {
               })
             ))}
             
+            {/* Range Indicator */}
+            {selectedTurret && (() => {
+              const turret = getTurretAt(selectedTurret.x, selectedTurret.y);
+              if (!turret) return null;
+              
+              // Calculate range in percentage relative to grid size
+              // Range is in tiles. Grid width is 'width' tiles.
+              // 1 tile width = 100% / width
+              // Range radius = range * (100% / width)
+              // Diameter = 2 * Range radius
+              
+              const tileWidthPercent = 100 / width;
+              const tileHeightPercent = 100 / height;
+              
+              // We need to use the larger dimension to ensure circle is circular if grid is not square aspect ratio?
+              // Actually, the grid cells are square (w-10 h-10), but the container might scale.
+              // The coordinates x,y are in tile units.
+              
+              return (
+                <div
+                  className="absolute border-2 border-cyan-400/50 bg-cyan-400/10 rounded-full pointer-events-none z-10 transition-all duration-300"
+                  style={{
+                    left: `calc(${selectedTurret.x} * 100% / ${width} + 50% / ${width})`,
+                    top: `calc(${selectedTurret.y} * 100% / ${height} + 50% / ${height})`,
+                    width: `calc(${turret.range * 2} * 100% / ${width})`,
+                    height: `calc(${turret.range * 2} * 100% / ${height})`, // This assumes square tiles and aspect ratio preservation
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                />
+              );
+            })()}
+
             {/* Enemy */}
                 {enemies.map(enemy => {
                   const stats = ENEMY_STATS[enemy.type];
