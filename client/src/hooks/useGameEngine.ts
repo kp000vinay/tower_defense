@@ -517,9 +517,52 @@ export function useGameEngine(
         const dist = Math.sqrt(dx*dx + dy*dy);
         
         if (dist > 1.0) { // Move if not in melee range
-           const moveDist = enemy.speed * TICK_MS / 1000;
-           enemy.x += (dx / dist) * moveDist;
-           enemy.y += (dy / dist) * moveDist;
+           // Calculate path if needed (every 30 ticks or if no path)
+           if (!enemy.path || enemy.path.length === 0 || frameRef.current % 30 === 0) {
+             const startNode = { x: Math.round(enemy.x), y: Math.round(enemy.y) };
+             const endNode = { x: Math.round(targetX), y: Math.round(targetY) };
+             const newPath = findPath(grid, startNode, endNode, width, height);
+             if (newPath && newPath.length > 0) {
+               enemy.path = newPath;
+               enemy.pathIndex = 0;
+             }
+           }
+
+           // Follow path
+           if (enemy.path && enemy.path.length > 0) {
+             // Get next waypoint
+             // If close to current waypoint, move to next
+             let nextPoint = enemy.path[enemy.pathIndex];
+             
+             // If we are close to the next point, advance index
+             const distToNext = Math.sqrt(Math.pow(nextPoint.x - enemy.x, 2) + Math.pow(nextPoint.y - enemy.y, 2));
+             if (distToNext < 0.1) {
+               enemy.pathIndex++;
+               if (enemy.path && enemy.pathIndex >= (enemy.path as any[]).length) {
+                 // Reached end of path (target)
+                 (enemy as any).path = [];
+               } else if (enemy.path) {
+                 nextPoint = (enemy.path as any[])[enemy.pathIndex];
+               }
+             }
+             
+             if (nextPoint) {
+               const pdx = nextPoint.x - enemy.x;
+               const pdy = nextPoint.y - enemy.y;
+               const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+               
+               if (pdist > 0) {
+                 const moveDist = enemy.speed * TICK_MS / 1000;
+                 enemy.x += (pdx / pdist) * moveDist;
+                 enemy.y += (pdy / pdist) * moveDist;
+               }
+             }
+           } else {
+             // Fallback to direct movement if no path found (e.g. blocked)
+             const moveDist = enemy.speed * TICK_MS / 1000;
+             enemy.x += (dx / dist) * moveDist;
+             enemy.y += (dy / dist) * moveDist;
+           }
         } else {
           // Attack!
           if (!enemy.lastFired || time - enemy.lastFired >= 1000) {
