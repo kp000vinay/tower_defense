@@ -44,6 +44,7 @@ export default function LevelEditor() {
     upgradeTurret,
     getTurretAt,
     sellTurret,
+    repairTurret,
     highScore,
     particles
   } = useGameEngine(width, height, grid, pathPreview);
@@ -64,6 +65,22 @@ export default function LevelEditor() {
             newGrid[y][x] = originalTile;
             setGrid(newGrid);
             toast.success(`Turret recycled! +${refundAmount} CR`);
+          }
+        }
+        return;
+      }
+
+      if (selectedTool === 'repair') {
+        const turret = getTurretAt(x, y);
+        if (turret) {
+          if (turret.health >= turret.maxHealth) {
+            toast.info('Turret is already fully operational.');
+          } else {
+            if (repairTurret(x, y)) {
+              toast.success('Turret repaired!');
+            } else {
+              toast.error('Insufficient credits for repair!');
+            }
           }
         }
         return;
@@ -152,34 +169,34 @@ export default function LevelEditor() {
   return (
     <div className="flex flex-col h-full gap-6 p-4">
       {/* Control Panel */}
-      <Card className="p-4 panel flex flex-wrap items-center gap-4 justify-between bg-card/90 backdrop-blur-md border-primary/20">
+      <Card className="p-4 panel flex flex-wrap items-center gap-4 justify-between bg-black/80 backdrop-blur-md border-primary/20">
         <div className="flex items-center gap-4">
           <div className="flex flex-col">
-            <label className="text-xs text-muted-foreground uppercase tracking-widest font-mono">Sector ID</label>
+            <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Sector ID</label>
             <Input 
               value={levelName} 
               onChange={(e) => setLevelName(e.target.value)} 
-              className="w-64 font-mono bg-background/50 border-primary/30 focus:border-primary"
+              className="w-64 font-mono bg-black/50 border-primary/30 focus:border-primary"
             />
           </div>
           
           <div className="flex items-center gap-2 border-l border-border pl-4">
             <div className="flex flex-col w-20">
-              <label className="text-xs text-muted-foreground uppercase tracking-widest font-mono">Width</label>
+              <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Width</label>
               <Input 
                 type="number" 
                 value={width} 
                 onChange={(e) => setWidth(Number(e.target.value))}
-                className="font-mono bg-background/50"
+                className="font-mono bg-black/50"
               />
             </div>
             <div className="flex flex-col w-20">
-              <label className="text-xs text-muted-foreground uppercase tracking-widest font-mono">Height</label>
+              <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Height</label>
               <Input 
                 type="number" 
                 value={height} 
                 onChange={(e) => setHeight(Number(e.target.value))}
-                className="font-mono bg-background/50"
+                className="font-mono bg-black/50"
               />
             </div>
           </div>
@@ -250,16 +267,34 @@ export default function LevelEditor() {
               <span className="text-xs uppercase font-mono tracking-wider text-red-400">SELL</span>
             </button>
 
+            {/* Repair Tool */}
+            <button
+              onClick={() => setSelectedTool('repair')}
+              disabled={gameState !== 'playing'}
+              className={`
+                p-3 flex flex-col items-center justify-center gap-2 border transition-all
+                ${selectedTool === 'repair' 
+                  ? 'border-green-500 bg-green-500/10 shadow-[0_0_10px_rgba(34,197,94,0.3)]' 
+                  : 'border-border hover:border-green-500/50 hover:bg-green-500/5'}
+                ${gameState !== 'playing' ? 'opacity-30 cursor-not-allowed' : ''}
+              `}
+            >
+              <div className="w-8 h-8 bg-green-900/50 border border-green-500/50 flex items-center justify-center">
+                <Wrench className="w-4 h-4 text-green-500" />
+              </div>
+              <span className="text-xs uppercase font-mono tracking-wider text-green-400">REPAIR</span>
+            </button>
+
             {gameState === 'playing' && (
               <div className="col-span-2 mt-2 p-2 bg-primary/10 border border-primary/30 rounded text-xs text-center">
                 <p className="text-primary font-bold mb-1">UPGRADE SYSTEM</p>
-                <p className="text-muted-foreground">Click existing turret to upgrade</p>
+                <p className="text-slate-400">Click existing turret to upgrade</p>
                 <p className="text-yellow-500 font-mono">{UPGRADE_COST} CR</p>
               </div>
             )}
           </div>
 
-          <div className="mt-auto p-4 bg-black/20 border border-white/5 rounded text-xs font-mono text-muted-foreground">
+          <div className="mt-auto p-4 bg-black/20 border border-white/5 rounded text-xs font-mono text-slate-400">
             <p className="mb-2 text-primary">STATUS: {gameState === 'playing' ? 'COMBAT ACTIVE' : 'EDITING'}</p>
             
             {/* Large Credit Display */}
@@ -286,7 +321,7 @@ export default function LevelEditor() {
         </Card>
 
         {/* Grid Canvas */}
-        <Card className="flex-1 p-8 panel overflow-auto flex items-center justify-center bg-black/40 relative">
+        <Card className="flex-1 p-8 panel overflow-hidden flex items-center justify-center bg-black/40 relative">
           {/* Game Over Overlay */}
           {gameState === 'gameover' && (
             <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-500">
@@ -316,8 +351,11 @@ export default function LevelEditor() {
             className="grid gap-[1px] bg-border/30 p-[1px] shadow-2xl relative z-10"
             style={{ 
               gridTemplateColumns: `repeat(${width}, minmax(2rem, 1fr))`,
+              width: 'fit-content',
+              height: 'fit-content',
+              maxHeight: '100%',
               maxWidth: '100%',
-              maxHeight: '100%'
+              overflow: 'auto'
             }}
             onMouseLeave={() => setIsDragging(false)}
           >
@@ -367,6 +405,31 @@ export default function LevelEditor() {
                             </span>
                           </div>
                         )}
+                        {/* Repair Preview Tooltip */}
+                        {selectedTool === 'repair' && (
+                          <div className="absolute inset-0 bg-green-500/30 flex items-center justify-center z-20 group">
+                            {(() => {
+                              const t = getTurretAt(x, y);
+                              if (!t || t.health >= t.maxHealth) return null;
+                              const missingHp = t.maxHealth - t.health;
+                              const cost = Math.ceil(missingHp * 0.5);
+                              return (
+                                <span className="text-[8px] font-bold text-white bg-black/80 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                  -{cost}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        )}
+                        {/* Health Bar for Turrets */}
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
+                          <div 
+                            className={`h-full transition-all duration-300 ${
+                              (getTurretAt(x, y)?.health || 0) < (getTurretAt(x, y)?.maxHealth || 0) * 0.3 ? 'bg-red-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${((getTurretAt(x, y)?.health || 0) / (getTurretAt(x, y)?.maxHealth || 1)) * 100}%` }}
+                          />
+                        </div>
                       </>
                     )}
                     {isPath && gameState === 'editing' && (
@@ -411,7 +474,9 @@ export default function LevelEditor() {
                 {projectiles.map(proj => (
                   <div
                     key={proj.id}
-                    className="absolute w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.8)] z-30 pointer-events-none will-change-transform"
+                    className={`absolute w-2 h-2 rounded-full z-30 pointer-events-none will-change-transform
+                      ${proj.source === 'turret' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.8)]' : 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]'}
+                    `}
                     style={{
                       left: `calc(${proj.x} * 100% / ${width} + 50% / ${width})`,
                       top: `calc(${proj.y} * 100% / ${height} + 50% / ${height})`,
