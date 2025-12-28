@@ -47,7 +47,13 @@ export default function LevelEditor() {
     repairTurret,
     highScore,
     particles
-  } = useGameEngine(width, height, grid, pathPreview);
+  } = useGameEngine(width, height, grid, pathPreview, (x, y, originalTile) => {
+    setGrid(prev => {
+      const newGrid = [...prev];
+      newGrid[y][x] = originalTile;
+      return newGrid;
+    });
+  });
   
   const handleTileClick = (x: number, y: number) => {
     if (gameState === 'playing') {

@@ -27,7 +27,7 @@ export const TILE_COLORS: Record<TileType, string> = {
 export const DEFAULT_WIDTH = 20;
 export const DEFAULT_HEIGHT = 12;
 
-export type EnemyType = 'standard' | 'scout' | 'tank' | 'striker';
+export type EnemyType = 'standard' | 'scout' | 'tank';
 
 export interface Enemy {
   id: string;
@@ -50,7 +50,6 @@ export const ENEMY_STATS: Record<EnemyType, { health: number; speed: number; rew
   standard: { health: 100, speed: 2.5, reward: 10, color: 'bg-red-500' },
   scout: { health: 40, speed: 4.5, reward: 5, color: 'bg-yellow-400' },
   tank: { health: 300, speed: 1.2, reward: 25, color: 'bg-blue-600' },
-  striker: { health: 80, speed: 3.0, reward: 15, color: 'bg-orange-500' },
 };
 
 export const TURRET_STATS = {
