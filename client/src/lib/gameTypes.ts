@@ -1,4 +1,4 @@
-export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper' | 'rubble' | 'resource_stone' | 'resource_metal' | 'quarry' | 'forge' | 'abandoned_quarry' | 'abandoned_forge' | 'drone_factory' | 'abandoned_drone_factory';
+export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper' | 'rubble' | 'resource_stone' | 'resource_metal' | 'quarry' | 'forge' | 'abandoned_quarry' | 'abandoned_forge' | 'drone_factory' | 'abandoned_drone_factory' | 'maintenance_hub' | 'wreckage';
 
 export interface Tile {
   x: number;
@@ -31,6 +31,8 @@ export const TILE_COLORS: Record<TileType, string> = {
   abandoned_forge: 'bg-orange-900/50',
   drone_factory: 'bg-indigo-600',
   abandoned_drone_factory: 'bg-indigo-900/50',
+  maintenance_hub: 'bg-emerald-600',
+  wreckage: 'bg-red-900/50',
 };
 
 export const DEFAULT_WIDTH = 20;
@@ -53,6 +55,9 @@ export interface Enemy {
   attackRange?: number;
   attackDamage?: number;
   attackCooldown?: number;
+  targetId?: string | null; // ID of the building/turret they are targeting
+  targetType?: 'turret' | 'building' | 'base';
+  path?: {x: number, y: number}[]; // Dynamic path to target
 }
 
 export const ENEMY_STATS: Record<EnemyType, { health: number; speed: number; reward: number; color: string }> = {
@@ -89,17 +94,19 @@ export interface TurretEntity {
   health: number;
   maxHealth: number;
   type: 'standard' | 'sniper';
+  isWreckage?: boolean;
 }
 
 export interface BuildingEntity {
   id: string;
   x: number;
   y: number;
-  type: 'quarry' | 'forge' | 'drone_factory';
+  type: 'quarry' | 'forge' | 'drone_factory' | 'maintenance_hub';
   health: number;
   maxHealth: number;
   productionRate: number; // Resources per second
   lastProduced: number;
+  isWreckage?: boolean;
 }
 
 export interface Projectile {
@@ -130,6 +137,7 @@ export const TURRET_COST = { stone: 0, metal: 50 };
 export const SNIPER_COST = { stone: 0, metal: 120 };
 export const QUARRY_COST = { stone: 50, metal: 0 };
 export const FORGE_COST = { stone: 100, metal: 0 };
+export const MAINTENANCE_HUB_COST = { stone: 100, metal: 100 };
 export const WALL_COST = { stone: 10, metal: 0 };
 export const PATH_COST = { stone: 5, metal: 0 };
 export const REPAIR_BUILDING_COST = { stone: 25, metal: 10 };
@@ -166,16 +174,26 @@ export interface Drone {
   state: 'idle' | 'moving_to_job' | 'working' | 'returning';
   jobId: string | null;
   speed: number;
+  type: 'worker' | 'repair';
 }
 
 export interface ConstructionJob {
   id: string;
   x: number;
   y: number;
-  type: 'build_turret' | 'build_sniper' | 'build_quarry' | 'build_forge';
+  type: 'build_turret' | 'build_sniper' | 'build_quarry' | 'build_forge' | 'build_maintenance_hub';
   progress: number; // 0 to 100
   totalWork: number; // Time/ticks needed
   assignedDroneId: string | null;
   status: 'pending' | 'in_progress' | 'completed';
   cost: { stone: number; metal: number };
+}
+
+export interface RepairJob {
+  id: string;
+  targetId: string;
+  targetType: 'turret' | 'building';
+  x: number;
+  y: number;
+  assignedDroneId: string | null;
 }

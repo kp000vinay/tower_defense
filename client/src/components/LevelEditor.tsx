@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS, QUARRY_COST, FORGE_COST, REPAIR_BUILDING_COST, REPAIR_FACTORY_COST } from '@/lib/gameTypes';
+import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS, QUARRY_COST, FORGE_COST, REPAIR_BUILDING_COST, REPAIR_FACTORY_COST, MAINTENANCE_HUB_COST } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
 import { Enemy } from '@/lib/gameTypes';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench, Pickaxe, Hammer, Mountain, Gem, EyeOff, Bot } from 'lucide-react';
+import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench, Pickaxe, Hammer, Mountain, Gem, EyeOff, Bot, HeartPulse, ArrowDownCircle } from 'lucide-react';
 
 export default function LevelEditor() {
   const [levelName, setLevelName] = useState('New Sector');
@@ -63,6 +63,10 @@ export default function LevelEditor() {
           setSelectedTool('forge');
           toast.info('Tool: Forge');
           break;
+        case 'm':
+          setSelectedTool('maintenance_hub');
+          toast.info('Tool: Maintenance Hub');
+          break;
         case 'escape':
           setSelectedTool('empty'); // Or whatever "no tool" state is appropriate
           break;
@@ -100,7 +104,14 @@ export default function LevelEditor() {
     setGrid(prev => {
       const newGrid = [...prev];
       // Set to rubble instead of restoring original tile
-      newGrid[y][x] = 'rubble';
+      // Actually, for wreckage mechanic, we keep the tile as is but render it differently
+      // So we don't need to change the grid tile type to 'rubble' anymore for destroyed buildings
+      // UNLESS we want to allow clearing it.
+      // Let's keep the tile type but render an overlay.
+      // BUT, if we want to allow building over it, maybe we should change it?
+      // The prompt says "turn into Wreckage... Repair Drones automatically detect... and begin repairing".
+      // So it should stay as the building type but be "broken".
+      // So we do NOTHING to the grid here.
       return newGrid;
     });
   }, (x, y, type) => {
@@ -206,11 +217,11 @@ export default function LevelEditor() {
         }
       }
 
-      if (selectedTool === 'quarry' || selectedTool === 'forge') {
+      if (selectedTool === 'quarry' || selectedTool === 'forge' || selectedTool === 'maintenance_hub') {
         // Building placement logic
-        const requiredTile = selectedTool === 'quarry' ? 'resource_stone' : 'resource_metal';
+        const requiredTile = selectedTool === 'quarry' ? 'resource_stone' : (selectedTool === 'forge' ? 'resource_metal' : null);
         
-        if (grid[y][x] === requiredTile) {
+        if (!requiredTile || grid[y][x] === requiredTile || (selectedTool === 'maintenance_hub' && (grid[y][x] === 'empty' || grid[y][x] === 'rubble'))) {
            if (buildBuilding(x, y, selectedTool)) {
              // Don't update grid immediately - wait for drone
              toast.success(`Construction order placed! Waiting for drone...`);
@@ -218,7 +229,7 @@ export default function LevelEditor() {
              toast.error('Insufficient resources!');
            }
         } else {
-          toast.error(`Must build ${selectedTool} on ${selectedTool === 'quarry' ? 'Stone' : 'Metal'} deposit!`);
+          toast.error(`Invalid placement for ${selectedTool}!`);
         }
       }
 
@@ -276,486 +287,447 @@ export default function LevelEditor() {
   const clearGrid = () => {
     if (confirm('WARNING: Purging sector data. Confirm?')) {
       setGrid(Array(height).fill(null).map(() => Array(width).fill('empty')));
+      setPathPreview(null);
+      toast.success('Sector purged.');
     }
   };
 
   return (
-    <div className="flex flex-col h-full gap-6 p-4">
-      {/* Control Panel */}
-      <Card className="p-4 panel flex flex-wrap items-center gap-4 justify-between bg-black/80 backdrop-blur-md border-primary/20">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-mono overflow-hidden">
+      {/* Header */}
+      <header className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between shrink-0 z-10 shadow-md">
         <div className="flex items-center gap-4">
-          <div className="flex flex-col">
-            <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Sector ID</label>
+          <h1 className="text-xl font-bold text-cyan-400 tracking-wider flex items-center gap-2">
+            <Grid3X3 className="w-6 h-6" />
+            SECTOR DEFENSE
+          </h1>
+          <div className="h-6 w-px bg-slate-700 mx-2" />
+          <div className="flex items-center gap-2">
             <Input 
               value={levelName} 
-              onChange={(e) => setLevelName(e.target.value)} 
-              className="w-64 font-mono bg-black/50 border-primary/30 focus:border-primary"
+              onChange={(e) => setLevelName(e.target.value)}
+              className="bg-slate-800 border-slate-700 text-slate-200 w-48 h-8 focus:ring-cyan-500/50"
             />
-          </div>
-          
-          <div className="flex items-center gap-2 border-l border-border pl-4">
-            <div className="flex flex-col w-20">
-              <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Width</label>
-              <Input 
-                type="number" 
-                value={width} 
-                onChange={(e) => setWidth(Number(e.target.value))}
-                className="font-mono bg-black/50"
-              />
-            </div>
-            <div className="flex flex-col w-20">
-              <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Height</label>
-              <Input 
-                type="number" 
-                value={height} 
-                onChange={(e) => setHeight(Number(e.target.value))}
-                className="font-mono bg-black/50"
-              />
-            </div>
+            <Button size="sm" variant="outline" onClick={saveLevel} className="h-8 border-slate-700 hover:bg-slate-800 hover:text-cyan-400">
+              <Save className="w-4 h-4 mr-2" /> Save
+            </Button>
+            <Button size="sm" variant="outline" onClick={clearGrid} className="h-8 border-slate-700 hover:bg-red-900/20 hover:text-red-400 hover:border-red-900/50">
+              <Trash2 className="w-4 h-4 mr-2" /> Clear
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {gameState === 'editing' ? (
-            <>
-              <Button variant="outline" onClick={clearGrid} className="text-destructive border-destructive/50 hover:bg-destructive/10">
-                <Trash2 className="w-4 h-4 mr-2" /> Purge
-              </Button>
-              <Button onClick={saveLevel} className="bg-primary text-primary-foreground hover:bg-primary/90 hazard-border">
-                <Save className="w-4 h-4 mr-2" /> Save Sector
-              </Button>
-              <Button onClick={startGame} className="bg-green-600 hover:bg-green-700 text-white hazard-border animate-pulse">
-                <Play className="w-4 h-4 mr-2" /> Engage
-              </Button>
-            </>
-          ) : (
-            <Button onClick={stopGame} variant="destructive" className="hazard-border">
-              Abort Mission
-            </Button>
+        <div className="flex items-center gap-6">
+          {/* Resources Display */}
+          <div className="flex items-center gap-4 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-800">
+            <div className="flex items-center gap-2 text-stone-400">
+              <Mountain className="w-4 h-4" />
+              <span className="font-bold">{Math.floor(resources.stone)}</span>
+            </div>
+            <div className="flex items-center gap-2 text-cyan-400">
+              <Gem className="w-4 h-4" />
+              <span className="font-bold">{Math.floor(resources.metal)}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-slate-400">
+              Wave: <span className="text-cyan-400 font-bold">{wave}</span>
+            </div>
+            <div className="text-sm text-slate-400">
+              Lives: <span className={`${lives < 5 ? 'text-red-500 animate-pulse' : 'text-green-400'} font-bold`}>{lives}</span>
+            </div>
+            <div className="text-sm text-slate-400">
+              Score: <span className="text-yellow-400 font-bold">{highScore}</span>
+            </div>
+          </div>
+
+          <Button 
+            onClick={gameState === 'playing' ? stopGame : startGame}
+            variant={gameState === 'playing' ? "destructive" : "default"}
+            className={`w-32 font-bold tracking-wide transition-all ${gameState === 'playing' ? 'bg-red-600 hover:bg-red-700' : 'bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_15px_rgba(8,145,178,0.5)]'}`}
+          >
+            {gameState === 'playing' ? 'ABORT' : 'DEPLOY'}
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar Tools */}
+        <aside className="w-72 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-6 overflow-y-auto shrink-0 z-10">
+          {/* Build Tools */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Infrastructure</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <ToolButton 
+                active={selectedTool === 'path'} 
+                onClick={() => setSelectedTool('path')}
+                icon={<div className="w-4 h-4 bg-slate-600 rounded-sm" />}
+                label="Path"
+                cost={null}
+              />
+              <ToolButton 
+                active={selectedTool === 'wall'} 
+                onClick={() => setSelectedTool('wall')}
+                icon={<div className="w-4 h-4 bg-slate-500 border border-slate-400 rounded-sm" />}
+                label="Wall"
+                cost={null}
+              />
+              <ToolButton 
+                active={selectedTool === 'quarry'} 
+                onClick={() => setSelectedTool('quarry')}
+                icon={<Mountain className="w-4 h-4 text-amber-600" />}
+                label="Quarry"
+                cost={QUARRY_COST}
+              />
+              <ToolButton 
+                active={selectedTool === 'forge'} 
+                onClick={() => setSelectedTool('forge')}
+                icon={<Hammer className="w-4 h-4 text-orange-500" />}
+                label="Forge"
+                cost={FORGE_COST}
+              />
+              <ToolButton 
+                active={selectedTool === 'maintenance_hub'} 
+                onClick={() => setSelectedTool('maintenance_hub')}
+                icon={<HeartPulse className="w-4 h-4 text-emerald-500" />}
+                label="Maint. Hub"
+                cost={MAINTENANCE_HUB_COST}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Defenses</h3>
+            <div className="grid grid-cols-1 gap-2">
+              <ToolButton 
+                active={selectedTool === 'turret'} 
+                onClick={() => setSelectedTool('turret')}
+                icon={<div className="w-4 h-4 bg-yellow-500 rounded-full border-2 border-yellow-700" />}
+                label="Turret"
+                cost={TURRET_COST}
+              />
+              <ToolButton 
+                active={selectedTool === 'sniper'} 
+                onClick={() => setSelectedTool('sniper')}
+                icon={<div className="w-4 h-4 bg-purple-500 rounded-full border-2 border-purple-700" />}
+                label="Sniper"
+                cost={SNIPER_COST}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Management</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <ToolButton 
+                active={selectedTool === 'repair'} 
+                onClick={() => setSelectedTool('repair')}
+                icon={<Wrench className="w-4 h-4 text-green-400" />}
+                label="Repair"
+                cost={null}
+              />
+              <ToolButton 
+                active={selectedTool === 'sell'} 
+                onClick={() => setSelectedTool('sell')}
+                icon={<Trash2 className="w-4 h-4 text-red-400" />}
+                label="Recycle"
+                cost={null}
+              />
+            </div>
+          </div>
+
+          {/* Map Elements (Editor Only) */}
+          {gameState === 'editing' && (
+            <div className="space-y-3 pt-4 border-t border-slate-800">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Map Editor</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <ToolButton 
+                  active={selectedTool === 'base'} 
+                  onClick={() => setSelectedTool('base')}
+                  icon={<div className="w-4 h-4 bg-blue-600 rounded-sm" />}
+                  label="Base"
+                  cost={null}
+                />
+                <ToolButton 
+                  active={selectedTool === 'spawn'} 
+                  onClick={() => setSelectedTool('spawn')}
+                  icon={<div className="w-4 h-4 bg-red-600 rounded-sm" />}
+                  label="Spawn"
+                  cost={null}
+                />
+                <ToolButton 
+                  active={selectedTool === 'resource_stone'} 
+                  onClick={() => setSelectedTool('resource_stone')}
+                  icon={<div className="w-4 h-4 bg-stone-400 rounded-sm" />}
+                  label="Stone"
+                  cost={null}
+                />
+                <ToolButton 
+                  active={selectedTool === 'resource_metal'} 
+                  onClick={() => setSelectedTool('resource_metal')}
+                  icon={<div className="w-4 h-4 bg-cyan-700 rounded-sm" />}
+                  label="Metal"
+                  cost={null}
+                />
+                <ToolButton 
+                  active={selectedTool === 'abandoned_quarry'} 
+                  onClick={() => setSelectedTool('abandoned_quarry')}
+                  icon={<div className="w-4 h-4 bg-amber-900/50 rounded-sm" />}
+                  label="Aband. Quarry"
+                  cost={null}
+                />
+                <ToolButton 
+                  active={selectedTool === 'abandoned_forge'} 
+                  onClick={() => setSelectedTool('abandoned_forge')}
+                  icon={<div className="w-4 h-4 bg-orange-900/50 rounded-sm" />}
+                  label="Aband. Forge"
+                  cost={null}
+                />
+                <ToolButton 
+                  active={selectedTool === 'abandoned_drone_factory'} 
+                  onClick={() => setSelectedTool('abandoned_drone_factory')}
+                  icon={<div className="w-4 h-4 bg-indigo-900/50 rounded-sm" />}
+                  label="Aband. Factory"
+                  cost={null}
+                />
+                <ToolButton 
+                  active={selectedTool === 'empty'} 
+                  onClick={() => setSelectedTool('empty')}
+                  icon={<div className="w-4 h-4 border border-slate-600 rounded-sm" />}
+                  label="Eraser"
+                  cost={null}
+                />
+              </div>
+            </div>
           )}
-        </div>
-      </Card>
-
-      <div className="flex gap-6 h-full min-h-0">
-        {/* Tools Sidebar */}
-        <Card className="w-64 p-4 panel flex flex-col gap-4 bg-black/80 backdrop-blur-md border-primary/20 overflow-y-auto">
-          <div className="flex items-center gap-2 pb-2 border-b border-border">
-            <Wrench className="w-4 h-4 text-primary" />
-            <h2 className="font-mono text-sm tracking-widest text-primary">CONSTRUCTION</h2>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              variant={selectedTool === 'empty' ? 'default' : 'outline'} 
-              className={`h-20 flex flex-col gap-2 ${selectedTool === 'empty' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('empty')}
-            >
-              <div className="w-6 h-6 bg-slate-900 border border-slate-700" />
-              <span className="text-xs font-mono">EMPTY</span>
-            </Button>
-            
-            <Button 
-              variant={selectedTool === 'wall' ? 'default' : 'outline'} 
-              className={`h-20 flex flex-col gap-2 ${selectedTool === 'wall' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('wall')}
-            >
-              <div className="w-6 h-6 bg-slate-800 border border-slate-600" />
-              <span className="text-xs font-mono">WALL</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'path' ? 'default' : 'outline'} 
-              className={`h-20 flex flex-col gap-2 ${selectedTool === 'path' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('path')}
-            >
-              <div className="w-6 h-6 bg-slate-700" />
-              <span className="text-xs font-mono">PATH</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'base' ? 'default' : 'outline'} 
-              className={`h-20 flex flex-col gap-2 ${selectedTool === 'base' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('base')}
-            >
-              <div className="w-6 h-6 bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.5)]" />
-              <span className="text-xs font-mono">BASE</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'spawn' ? 'default' : 'outline'} 
-              className={`h-20 flex flex-col gap-2 ${selectedTool === 'spawn' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('spawn')}
-            >
-              <div className="w-6 h-6 bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]" />
-              <span className="text-xs font-mono">SPAWN</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'resource_stone' ? 'default' : 'outline'} 
-              className={`h-20 flex flex-col gap-2 ${selectedTool === 'resource_stone' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('resource_stone')}
-            >
-              <div className="w-6 h-6 bg-stone-400" />
-              <span className="text-xs font-mono">STONE</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'resource_metal' ? 'default' : 'outline'} 
-              className={`h-20 flex flex-col gap-2 ${selectedTool === 'resource_metal' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('resource_metal')}
-            >
-              <div className="w-6 h-6 bg-cyan-700" />
-              <span className="text-xs font-mono">METAL</span>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2 pb-2 border-b border-border mt-4">
-            <Pickaxe className="w-4 h-4 text-primary" />
-            <h2 className="font-mono text-sm tracking-widest text-primary">BUILDINGS</h2>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              variant={selectedTool === 'quarry' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'quarry' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('quarry')}
-            >
-              <div className="w-6 h-6 bg-amber-700 rounded-sm" />
-              <span className="text-xs font-mono font-bold">QUARRY</span>
-              <span className="text-[10px] text-slate-400">{QUARRY_COST.stone}S</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'forge' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'forge' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('forge')}
-            >
-              <div className="w-6 h-6 bg-orange-600 rounded-sm" />
-              <span className="text-xs font-mono font-bold">FORGE</span>
-              <span className="text-[10px] text-slate-400">{FORGE_COST.stone}S</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'abandoned_quarry' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'abandoned_quarry' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('abandoned_quarry')}
-            >
-              <div className="w-6 h-6 bg-amber-900/50 rounded-sm border border-amber-700/50" />
-              <span className="text-xs font-mono font-bold text-center">OLD QUARRY</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'abandoned_forge' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'abandoned_forge' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('abandoned_forge')}
-            >
-              <div className="w-6 h-6 bg-orange-900/50 rounded-sm border border-orange-700/50" />
-              <span className="text-xs font-mono font-bold text-center">OLD FORGE</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'turret' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'turret' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('turret')}
-            >
-              <div className="w-6 h-6 bg-yellow-500 rounded-full" />
-              <span className="text-xs font-mono font-bold">TURRET</span>
-              <span className="text-[10px] text-slate-400">{TURRET_COST.metal}M</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'sniper' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'sniper' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('sniper')}
-            >
-              <div className="w-6 h-6 bg-purple-500 rounded-full border-2 border-white/20" />
-              <span className="text-xs font-mono font-bold">SNIPER</span>
-              <span className="text-[10px] text-slate-400">{SNIPER_COST.metal}M</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'drone_factory' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'drone_factory' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('drone_factory')}
-            >
-              <div className="w-6 h-6 bg-indigo-600 rounded-sm" />
-              <span className="text-xs font-mono font-bold">DRONE FAC</span>
-              <span className="text-[10px] text-slate-400">SPAWN</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'abandoned_drone_factory' ? 'default' : 'outline'} 
-              className={`h-24 flex flex-col gap-1 ${selectedTool === 'abandoned_drone_factory' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
-              onClick={() => setSelectedTool('abandoned_drone_factory')}
-            >
-              <div className="w-6 h-6 bg-indigo-900/50 rounded-sm border border-indigo-700/50" />
-              <span className="text-xs font-mono font-bold text-center">OLD FACTORY</span>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2 pb-2 border-b border-border mt-4">
-            <Hammer className="w-4 h-4 text-primary" />
-            <h2 className="font-mono text-sm tracking-widest text-primary">ACTIONS</h2>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              variant={selectedTool === 'sell' ? 'default' : 'outline'} 
-              className={`h-16 flex flex-col gap-1 ${selectedTool === 'sell' ? 'bg-red-900/20 ring-2 ring-red-500' : 'bg-slate-900/50 hover:bg-red-900/10'}`}
-              onClick={() => setSelectedTool('sell')}
-            >
-              <span className="text-xs font-mono text-red-400">RECYCLE</span>
-            </Button>
-
-            <Button 
-              variant={selectedTool === 'repair' ? 'default' : 'outline'} 
-              className={`h-16 flex flex-col gap-1 ${selectedTool === 'repair' ? 'bg-green-900/20 ring-2 ring-green-500' : 'bg-slate-900/50 hover:bg-green-900/10'}`}
-              onClick={() => setSelectedTool('repair')}
-            >
-              <span className="text-xs font-mono text-green-400">REPAIR</span>
-            </Button>
-          </div>
-        </Card>
+        </aside>
 
         {/* Main Grid Area */}
-        <div className="flex-1 flex flex-col gap-4">
-          {/* HUD */}
-          <div className="flex items-center justify-between bg-black/60 p-4 rounded-lg border border-primary/20 backdrop-blur-sm">
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Status</span>
-                <span className={`font-mono text-xl ${gameState === 'playing' ? 'text-green-400 animate-pulse' : 'text-yellow-400'}`}>
-                  {gameState === 'playing' ? 'COMBAT ACTIVE' : 'DESIGN MODE'}
-                </span>
-              </div>
-              
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Wave</span>
-                <span className="font-mono text-xl text-white">{wave}</span>
-              </div>
+        <main className="flex-1 bg-slate-950 relative overflow-auto flex items-center justify-center p-8">
+          <div 
+            className="relative bg-slate-900 shadow-2xl border border-slate-800 select-none"
+            style={{ 
+              width: width * 40, 
+              height: height * 40,
+              cursor: selectedTool === 'empty' ? 'default' : 'crosshair'
+            }}
+            onMouseDown={() => setIsDragging(true)}
+            onMouseUp={() => setIsDragging(false)}
+            onMouseLeave={() => setIsDragging(false)}
+          >
+            {/* Grid Tiles */}
+            {grid.map((row, y) => (
+              row.map((tile, x) => {
+                // Determine if tile is visible (Fog of War)
+                const isVisible = gameState === 'editing' || (visibleTiles[y] && visibleTiles[y][x]);
+                
+                // Check for wreckage status
+                const turret = getTurretAt(x, y);
+                const isWreckage = turret?.isWreckage; 
+                
+                // Check if a repair drone is en route to this tile
+                const isRepairIncoming = drones.some(d => 
+                  d.type === 'repair' && 
+                  d.state === 'moving_to_job' && 
+                  d.targetX === x && 
+                  d.targetY === y
+                );
+                
+                return (
+                  <div
+                    key={`${x}-${y}`}
+                    className={`absolute w-10 h-10 border border-slate-800/50 transition-colors duration-200 flex items-center justify-center
+                      ${isVisible ? TILE_COLORS[tile] : 'bg-black'}
+                      ${!isVisible && gameState === 'playing' ? 'brightness-0' : ''}
+                    `}
+                    style={{ left: x * 40, top: y * 40 }}
+                    onMouseDown={() => handleTileClick(x, y)}
+                    onMouseEnter={() => handleMouseEnter(x, y)}
+                  >
+                    {/* Fog Overlay (Soft edges?) */}
+                    {!isVisible && gameState === 'playing' && (
+                      <div className="absolute inset-0 bg-black z-20" />
+                    )}
 
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Lives</span>
-                <span className={`font-mono text-xl ${lives < 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                  {lives}
-                </span>
-              </div>
+                    {/* Wreckage Overlay */}
+                    {isVisible && isWreckage && (
+                      <div className="absolute inset-0 bg-red-900/60 z-10 flex items-center justify-center animate-pulse">
+                        <Wrench className="w-6 h-6 text-red-400 opacity-75" />
+                      </div>
+                    )}
 
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Drones</span>
-                <span className="font-mono text-xl text-indigo-400">{drones.length}</span>
-              </div>
-            </div>
+                    {/* Repair Incoming Indicator */}
+                    {isVisible && isRepairIncoming && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 animate-bounce">
+                        <ArrowDownCircle className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_4px_rgba(34,211,238,0.8)]" />
+                      </div>
+                    )}
 
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Stone</span>
-                <span className="font-mono text-2xl text-stone-400 drop-shadow-[0_0_5px_rgba(168,162,158,0.5)]">
-                  {Math.floor(resources?.stone || 0)}
-                </span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Metal</span>
-                <span className="font-mono text-2xl text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]">
-                  {Math.floor(resources?.metal || 0)}
-                </span>
-              </div>
-            </div>
-          </div>
+                    {/* Path Preview Overlay */}
+                    {isVisible && pathPreview?.some(p => p.x === x && p.y === y) && (
+                      <div className="w-2 h-2 bg-cyan-400/50 rounded-full animate-pulse" />
+                    )}
 
-          {/* Game Grid */}
-          <div className="flex-1 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-center overflow-hidden relative">
-            {gameState === 'gameover' && (
-              <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center animate-in fade-in duration-500">
-                <h1 className="text-6xl font-black text-red-600 tracking-tighter mb-4 glitch-text">MISSION FAILED</h1>
-                <div className="flex flex-col gap-2 text-center mb-8">
-                  <p className="text-slate-400 font-mono">SECTOR OVERRUN AT WAVE {wave}</p>
-                  <p className="text-primary font-mono">HIGHEST WAVE SURVIVED: {highScore}</p>
-                </div>
-                <Button onClick={stopGame} size="lg" className="bg-white text-black hover:bg-slate-200 font-bold tracking-widest">
-                  RETURN TO EDITOR
-                </Button>
-              </div>
-            )}
+                    {/* Turret Range Preview */}
+                    {isVisible && selectedTurret && selectedTurret.x === x && selectedTurret.y === y && (
+                      <div 
+                        className="absolute rounded-full border border-cyan-500/30 bg-cyan-500/10 pointer-events-none z-10"
+                        style={{
+                          width: (tile === 'sniper' ? 14 : 7) * 40,
+                          height: (tile === 'sniper' ? 14 : 7) * 40,
+                          left: '50%',
+                          top: '50%',
+                          transform: 'translate(-50%, -50%)'
+                        }}
+                      />
+                    )}
 
-            <div 
-              className="grid gap-[1px] bg-slate-900/50 p-4 shadow-2xl"
-              style={{
-                gridTemplateColumns: `repeat(${width}, minmax(0, 1fr))`,
-                width: 'fit-content',
-              }}
-              onMouseLeave={() => setIsDragging(false)}
-              onMouseUp={() => setIsDragging(false)}
-            >
-              {grid.map((row, y) => (
-                row.map((tile, x) => {
-                  const turret = getTurretAt(x, y);
-                  const isSelected = selectedTurret?.x === x && selectedTurret?.y === y;
-                  const isVisible = gameState === 'editing' || (visibleTiles[y] && visibleTiles[y][x]);
-                  const job = jobs.find(j => j.x === x && j.y === y);
-                  
-                  return (
-                    <div
-                      key={`${x}-${y}`}
-                      className={`
-                        w-10 h-10 relative transition-all duration-200
-                        ${isVisible ? TILE_COLORS[tile] : 'bg-black'}
-                        ${isVisible && tile === 'empty' ? 'hover:bg-slate-800/50' : ''}
-                        ${isVisible && tile === 'path' && pathPreview?.some(p => p.x === x && p.y === y) ? 'brightness-125 shadow-[inset_0_0_10px_rgba(59,130,246,0.3)]' : ''}
-                        ${isSelected ? 'ring-2 ring-white z-10' : ''}
-                        cursor-pointer
-                      `}
-                      onMouseDown={() => {
-                        setIsDragging(true);
-                        handleTileClick(x, y);
-                      }}
-                      onMouseEnter={() => handleMouseEnter(x, y)}
-                    >
-                      {/* Fog Overlay */}
-                      {!isVisible && (
-                        <div className="absolute inset-0 bg-black z-50 flex items-center justify-center">
-                          <EyeOff className="w-3 h-3 text-slate-800" />
-                        </div>
-                      )}
-
-                      {/* Construction Site Overlay */}
-                      {isVisible && job && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 border border-yellow-500/50 border-dashed">
-                          <div className="w-full h-1 bg-slate-800 absolute bottom-1 left-0">
-                            <div 
-                              className="h-full bg-yellow-500 transition-all duration-200"
-                              style={{ width: `${job.progress}%` }}
-                            />
-                          </div>
-                          <Wrench className="w-4 h-4 text-yellow-500 animate-pulse" />
-                        </div>
-                      )}
-
-                      {/* Turret Level Indicator */}
-                      {isVisible && turret && (
-                        <div className="absolute top-0 right-0 bg-black/80 text-[8px] px-1 rounded-bl text-white font-mono">
-                          L{turret.level}
-                        </div>
-                      )}
-
-                      {/* Health Bar */}
-                      {isVisible && turret && turret.health < turret.maxHealth && (
-                        <div className="absolute -top-2 left-0 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                    {/* Construction Site Overlay */}
+                    {isVisible && jobs.some(j => j.x === x && j.y === y && j.status !== 'completed') && (
+                      <div className="absolute inset-0 border-2 border-dashed border-yellow-400 bg-yellow-400/10 z-10 flex items-center justify-center">
+                        <div className="w-full h-1 bg-slate-700 absolute bottom-1 left-0 px-1">
                           <div 
-                            className={`h-full transition-all duration-300 ${
-                              turret.health / turret.maxHealth < 0.3 ? 'bg-red-500' : 'bg-green-500'
-                            }`}
-                            style={{ width: `${(turret.health / turret.maxHealth) * 100}%` }}
+                            className="h-full bg-yellow-400 transition-all duration-200"
+                            style={{ width: `${jobs.find(j => j.x === x && j.y === y)?.progress || 0}%` }}
                           />
                         </div>
-                      )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ))}
 
-                      {/* Range Indicator */}
-                      {isSelected && turret && (
-                        <div 
-                          className="absolute top-1/2 left-1/2 rounded-full border-2 border-white/20 bg-white/5 pointer-events-none z-20"
-                          style={{
-                            width: `${turret.range * 2 * 40}px`, // 40px is tile size
-                            height: `${turret.range * 2 * 40}px`,
-                            transform: 'translate(-50%, -50%)'
-                          }}
-                        />
-                      )}
-
-                      {/* Render Game Entities */}
-                      {gameState === 'playing' && isVisible && (
-                        <>
-                          {/* Drones */}
-                          {drones.filter(d => Math.abs(d.x - x) < 0.5 && Math.abs(d.y - y) < 0.5).map(drone => (
-                            <div
-                              key={drone.id}
-                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
-                              style={{
-                                transform: `translate(${(drone.x - x) * 40}px, ${(drone.y - y) * 40}px)`
-                              }}
-                            >
-                              <Bot className={`w-4 h-4 ${drone.state === 'working' ? 'text-yellow-400 animate-bounce' : 'text-indigo-400'}`} />
-                            </div>
-                          ))}
-
-                          {/* Enemies */}
-                          {enemies.filter(e => Math.floor(e.x) === x && Math.floor(e.y) === y).map(enemy => (
-                            <div
-                              key={enemy.id}
-                              className={`absolute inset-0 m-1 rounded-full shadow-lg transition-transform duration-100 z-20 ${ENEMY_STATS[enemy.type].color}`}
-                              style={{
-                                transform: `translate(${(enemy.x - x) * 40}px, ${(enemy.y - y) * 40}px)`
-                              }}
-                            >
-                              {/* Enemy Health Bar */}
-                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
-                                <div 
-                                  className="h-full bg-red-500 transition-all duration-100"
-                                  style={{ width: `${(enemy.health / enemy.maxHealth) * 100}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-
-                          {/* Projectiles */}
-                          {projectiles.filter(p => Math.floor(p.x) === x && Math.floor(p.y) === y).map(proj => (
-                            <div
-                              key={proj.id}
-                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
-                            >
-                              <div className="w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)] animate-ping" />
-                            </div>
-                          ))}
-
-                          {/* Particles */}
-                          {particles.filter(p => Math.floor(p.x) === x && Math.floor(p.y) === y).map(p => (
-                            <div
-                              key={p.id}
-                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-40"
-                            >
-                              <div 
-                                className="w-1 h-1 rounded-full"
-                                style={{ 
-                                  backgroundColor: p.color,
-                                  opacity: p.life,
-                                  transform: `translate(${(Math.random() - 0.5) * 20}px, ${(Math.random() - 0.5) * 20}px)`
-                                }} 
-                              />
-                            </div>
-                          ))}
-
-                          {/* Damage Numbers */}
-                          {damageNumbers.filter(d => Math.floor(d.x) === x && Math.floor(d.y) === y).map(d => (
-                            <div
-                              key={d.id}
-                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
-                              style={{
-                                transform: `translateY(-${(1 - d.life) * 30}px) scale(${d.isCritical ? 1.5 : 1})`,
-                                opacity: d.life
-                              }}
-                            >
-                              <span 
-                                className={`font-bold drop-shadow-md ${d.isCritical ? 'text-sm animate-bounce' : 'text-xs'}`}
-                                style={{ 
-                                  color: d.isCritical ? '#fbbf24' : d.color, // Amber-400 for crit
-                                  textShadow: d.isCritical ? '0 0 5px rgba(251, 191, 36, 0.8)' : 'none'
-                                }}
-                              >
-                                {Math.round(d.value)}
-                                {d.isCritical && '!'}
-                              </span>
-                            </div>
-                          ))}
-                        </>
-                      )}
+            {/* Entities Layer (Enemies, Projectiles, Particles) */}
+            {gameState === 'playing' && (
+              <div className="absolute inset-0 pointer-events-none z-20">
+                {/* Enemies */}
+                {enemies.map(enemy => (
+                  <div
+                    key={enemy.id}
+                    className={`absolute w-6 h-6 rounded-full shadow-lg transition-transform duration-100 flex items-center justify-center ${ENEMY_STATS[enemy.type].color}`}
+                    style={{ 
+                      left: enemy.x * 40 + 7, 
+                      top: enemy.y * 40 + 7,
+                      opacity: visibleTiles[Math.round(enemy.y)]?.[Math.round(enemy.x)] ? 1 : 0 // Hide if in fog
+                    }}
+                  >
+                    {/* Health Bar */}
+                    <div className="absolute -top-3 left-0 w-full h-1 bg-slate-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500 transition-all duration-200"
+                        style={{ width: `${(enemy.health / enemy.maxHealth) * 100}%` }}
+                      />
                     </div>
-                  );
-                })
-              ))}
-            </div>
+                  </div>
+                ))}
+
+                {/* Drones */}
+                {drones.map(drone => (
+                  <div
+                    key={drone.id}
+                    className={`absolute w-4 h-4 rounded-sm shadow-md transition-transform duration-100 flex items-center justify-center
+                      ${drone.type === 'worker' ? (drone.state === 'working' ? 'bg-yellow-400' : 'bg-indigo-400') : 'bg-emerald-400'}
+                    `}
+                    style={{ 
+                      left: drone.x * 40 + 12, 
+                      top: drone.y * 40 + 12,
+                      opacity: visibleTiles[Math.round(drone.y)]?.[Math.round(drone.x)] ? 1 : 0
+                    }}
+                  >
+                    {drone.type === 'worker' ? <Bot className="w-3 h-3 text-slate-900" /> : <HeartPulse className="w-3 h-3 text-slate-900" />}
+                    
+                    {/* Repair Beam */}
+                    {drone.state === 'working' && drone.type === 'repair' && drone.targetX !== null && (
+                      <svg className="absolute top-1/2 left-1/2 w-[200px] h-[200px] -translate-x-1/2 -translate-y-1/2 pointer-events-none overflow-visible">
+                        <line 
+                          x1="50%" y1="50%" 
+                          x2={`${(drone.targetX - drone.x) * 40 + 100}px`} 
+                          y2={`${(drone.targetY - drone.y) * 40 + 100}px`} 
+                          stroke="#10b981" 
+                          strokeWidth="2" 
+                          strokeDasharray="4 2"
+                          className="animate-pulse"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                ))}
+
+                {/* Projectiles */}
+                {projectiles.map(proj => (
+                  <div
+                    key={proj.id}
+                    className={`absolute w-2 h-2 rounded-full ${proj.isCritical ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] scale-125' : 'bg-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.8)]'}`}
+                    style={{ 
+                      left: proj.x * 40 + 15, 
+                      top: proj.y * 40 + 15,
+                      opacity: visibleTiles[Math.round(proj.y)]?.[Math.round(proj.x)] ? 1 : 0
+                    }}
+                  />
+                ))}
+
+                {/* Particles */}
+                {particles.map(p => (
+                  <div
+                    key={p.id}
+                    className="absolute rounded-full"
+                    style={{
+                      left: p.x * 40 + 20,
+                      top: p.y * 40 + 20,
+                      width: p.size * 40,
+                      height: p.size * 40,
+                      backgroundColor: p.color,
+                      opacity: p.life,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                  />
+                ))}
+
+                {/* Damage Numbers */}
+                {damageNumbers.map(dn => (
+                  <div
+                    key={dn.id}
+                    className={`absolute font-bold text-center pointer-events-none select-none ${dn.isCritical ? 'text-lg z-30' : 'text-xs z-20'}`}
+                    style={{ 
+                      left: dn.x * 40, 
+                      top: dn.y * 40,
+                      width: 40,
+                      color: dn.color,
+                      opacity: dn.life,
+                      transform: `translateY(${(1 - dn.life) * -20}px) ${dn.isCritical ? 'scale(1.2)' : ''}`,
+                      textShadow: dn.isCritical ? '0 0 4px rgba(0,0,0,0.5)' : 'none'
+                    }}
+                  >
+                    {Math.round(dn.value)}
+                    {dn.isCritical && '!'}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        </main>
       </div>
     </div>
+  );
+}
+
+function ToolButton({ active, onClick, icon, label, cost }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, cost: { stone: number, metal: number } | null }) {
+  return (
+    <Button
+      variant={active ? "default" : "outline"}
+      className={`h-auto flex flex-col items-center justify-center gap-1 py-2 px-1 ${active ? 'bg-cyan-600 hover:bg-cyan-500 border-cyan-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-600'}`}
+      onClick={onClick}
+    >
+      {icon}
+      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+      {cost && (
+        <div className="flex gap-1 text-[9px] opacity-80">
+          {cost.stone > 0 && <span className="text-stone-400">{cost.stone}S</span>}
+          {cost.metal > 0 && <span className="text-cyan-400">{cost.metal}M</span>}
+        </div>
+      )}
+    </Button>
   );
 }
