@@ -1,4 +1,4 @@
-export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper' | 'rubble';
+export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper' | 'rubble' | 'resource_stone' | 'resource_metal' | 'quarry' | 'forge' | 'abandoned_quarry' | 'abandoned_forge' | 'drone_factory' | 'abandoned_drone_factory';
 
 export interface Tile {
   x: number;
@@ -23,6 +23,14 @@ export const TILE_COLORS: Record<TileType, string> = {
   turret: 'bg-yellow-500',
   sniper: 'bg-purple-500',
   rubble: 'bg-stone-600',
+  resource_stone: 'bg-stone-400',
+  resource_metal: 'bg-cyan-700',
+  quarry: 'bg-amber-700',
+  forge: 'bg-orange-600',
+  abandoned_quarry: 'bg-amber-900/50',
+  abandoned_forge: 'bg-orange-900/50',
+  drone_factory: 'bg-indigo-600',
+  abandoned_drone_factory: 'bg-indigo-900/50',
 };
 
 export const DEFAULT_WIDTH = 20;
@@ -83,6 +91,17 @@ export interface TurretEntity {
   type: 'standard' | 'sniper';
 }
 
+export interface BuildingEntity {
+  id: string;
+  x: number;
+  y: number;
+  type: 'quarry' | 'forge' | 'drone_factory';
+  health: number;
+  maxHealth: number;
+  productionRate: number; // Resources per second
+  lastProduced: number;
+}
+
 export interface Projectile {
   id: string;
   x: number;
@@ -107,11 +126,18 @@ export interface Particle {
   size: number;
 }
 
-export const TURRET_COST = 50;
-export const SNIPER_COST = 120;
-export const UPGRADE_COST = 75;
-export const SNIPER_UPGRADE_COST = 150;
-export const KILL_REWARD = 10;
+export const TURRET_COST = { stone: 0, metal: 50 };
+export const SNIPER_COST = { stone: 0, metal: 120 };
+export const QUARRY_COST = { stone: 50, metal: 0 };
+export const FORGE_COST = { stone: 100, metal: 0 };
+export const WALL_COST = { stone: 10, metal: 0 };
+export const PATH_COST = { stone: 5, metal: 0 };
+export const REPAIR_BUILDING_COST = { stone: 25, metal: 10 };
+export const REPAIR_FACTORY_COST = { stone: 50, metal: 50 };
+
+export const UPGRADE_COST = { stone: 0, metal: 75 };
+export const SNIPER_UPGRADE_COST = { stone: 0, metal: 150 };
+export const KILL_REWARD = 10; // Still keep some kill reward? Or remove? Let's keep for now as 'bounty'
 
 export interface DamageNumber {
   id: string;
@@ -121,4 +147,35 @@ export interface DamageNumber {
   life: number; // 0 to 1
   color: string;
   isCritical?: boolean;
+}
+
+export interface Resources {
+  stone: number;
+  metal: number;
+}
+
+export const FOG_RADIUS = 4; // Radius of visibility around base/buildings
+
+// Drone System Types
+export interface Drone {
+  id: string;
+  x: number;
+  y: number;
+  targetX: number | null;
+  targetY: number | null;
+  state: 'idle' | 'moving_to_job' | 'working' | 'returning';
+  jobId: string | null;
+  speed: number;
+}
+
+export interface ConstructionJob {
+  id: string;
+  x: number;
+  y: number;
+  type: 'build_turret' | 'build_sniper' | 'build_quarry' | 'build_forge';
+  progress: number; // 0 to 100
+  totalWork: number; // Time/ticks needed
+  assignedDroneId: string | null;
+  status: 'pending' | 'in_progress' | 'completed';
+  cost: { stone: number; metal: number };
 }

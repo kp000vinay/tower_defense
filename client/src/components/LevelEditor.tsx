@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS } from '@/lib/gameTypes';
+import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS, QUARRY_COST, FORGE_COST, REPAIR_BUILDING_COST, REPAIR_FACTORY_COST } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
 import { Enemy } from '@/lib/gameTypes';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench } from 'lucide-react';
+import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench, Pickaxe, Hammer, Mountain, Gem, EyeOff, Bot } from 'lucide-react';
 
 export default function LevelEditor() {
   const [levelName, setLevelName] = useState('New Sector');
@@ -55,6 +55,14 @@ export default function LevelEditor() {
           setSelectedTool('sniper');
           toast.info('Tool: Sniper Turret');
           break;
+        case 'q':
+          setSelectedTool('quarry');
+          toast.info('Tool: Quarry');
+          break;
+        case 'f':
+          setSelectedTool('forge');
+          toast.info('Tool: Forge');
+          break;
         case 'escape':
           setSelectedTool('empty'); // Or whatever "no tool" state is appropriate
           break;
@@ -70,12 +78,17 @@ export default function LevelEditor() {
     enemies, 
     wave, 
     lives, 
-    money, 
+    resources, 
     projectiles,
     damageNumbers,
+    visibleTiles,
+    drones,
+    jobs,
     startGame, 
     stopGame,
     buildTurret,
+    buildBuilding,
+    repairBuilding,
     upgradeTurret,
     getTurretAt,
     sellTurret,
@@ -90,6 +103,13 @@ export default function LevelEditor() {
       newGrid[y][x] = 'rubble';
       return newGrid;
     });
+  }, (x, y, type) => {
+    // On job complete
+    setGrid(prev => {
+      const newGrid = [...prev];
+      newGrid[y][x] = type;
+      return newGrid;
+    });
   });
   
   const handleTileClick = (x: number, y: number) => {
@@ -99,7 +119,11 @@ export default function LevelEditor() {
         // Check if there is a turret at this location using the engine's data
         const turret = getTurretAt(x, y);
         if (turret) {
-          const refundAmount = Math.floor((TURRET_COST + (turret.level - 1) * UPGRADE_COST) * 0.5);
+          const baseCost = turret.type === 'sniper' ? SNIPER_COST : TURRET_COST;
+          const upgradeCost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
+          const refundMetal = Math.floor((baseCost.metal + (turret.level - 1) * upgradeCost.metal) * 0.5);
+          const refundStone = Math.floor((baseCost.stone + (turret.level - 1) * upgradeCost.stone) * 0.5);
+          
           const originalTile = sellTurret(x, y);
           
           // Force update grid visual if engine confirms sale
@@ -107,7 +131,7 @@ export default function LevelEditor() {
             const newGrid = [...grid];
             newGrid[y][x] = originalTile;
             setGrid(newGrid);
-            toast.success(`Turret recycled! +${refundAmount} CR`);
+            toast.success(`Turret recycled! +${refundMetal} Metal, +${refundStone} Stone`);
           }
         } else if (grid[y][x] === 'rubble') {
           if (clearRubble(x, y)) {
@@ -116,13 +140,28 @@ export default function LevelEditor() {
             setGrid(newGrid);
             toast.success('Rubble cleared!');
           } else {
-            toast.error('Insufficient credits to clear rubble!');
+            toast.error('Insufficient resources to clear rubble!');
           }
         }
         return;
       }
 
       if (selectedTool === 'repair') {
+        // Check for abandoned buildings first
+        if (grid[y][x] === 'abandoned_quarry' || grid[y][x] === 'abandoned_forge' || grid[y][x] === 'abandoned_drone_factory') {
+          const newType = repairBuilding(x, y, grid[y][x] as 'abandoned_quarry' | 'abandoned_forge' | 'abandoned_drone_factory');
+          if (newType) {
+            const newGrid = [...grid];
+            newGrid[y][x] = newType;
+            setGrid(newGrid);
+            toast.success('Facility restored and operational!');
+          } else {
+            const cost = grid[y][x] === 'abandoned_drone_factory' ? REPAIR_FACTORY_COST : REPAIR_BUILDING_COST;
+            toast.error(`Need ${cost.stone} Stone, ${cost.metal} Metal to repair!`);
+          }
+          return;
+        }
+
         const turret = getTurretAt(x, y);
         if (turret) {
           if (turret.health >= turret.maxHealth) {
@@ -131,7 +170,7 @@ export default function LevelEditor() {
             if (repairTurret(x, y)) {
               toast.success('Turret repaired!');
             } else {
-              toast.error('Insufficient credits for repair!');
+              toast.error('Insufficient resources for repair!');
             }
           }
         }
@@ -147,21 +186,11 @@ export default function LevelEditor() {
         }
 
         if (grid[y][x] === 'empty' || grid[y][x] === 'wall' || grid[y][x] === 'rubble') {
-          // If rubble, try to clear it first (cost included in build or separate?)
-          // For better UX, let's just assume building on rubble clears it for free or includes the cost.
-          // Let's check if we can build.
-          
-          // If it's rubble, we might want to charge the clear cost automatically?
-          // Or just allow building over it if they have enough money for the turret.
-          // Let's keep it simple: building over rubble is allowed and replaces it.
-          
           if (buildTurret(x, y, selectedTool === 'sniper' ? 'sniper' : 'standard')) {
-            const newGrid = [...grid];
-            newGrid[y][x] = selectedTool;
-            setGrid(newGrid);
-            toast.success(`${selectedTool === 'sniper' ? 'Sniper' : 'Turret'} deployed!`);
+            // Don't update grid immediately - wait for drone
+            toast.success(`Construction order placed! Waiting for drone...`);
           } else {
-            toast.error('Insufficient credits!');
+            toast.error('Insufficient resources!');
           }
         } else if (grid[y][x] === 'turret' || grid[y][x] === 'sniper') {
           // Upgrade logic
@@ -171,11 +200,28 @@ export default function LevelEditor() {
             const turret = getTurretAt(x, y);
             if (turret) {
               const cost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
-              toast.info(`Level ${turret.level} ${turret.type === 'sniper' ? 'Sniper' : 'Turret'} (Upgrade: ${cost} CR)`);
+              toast.info(`Level ${turret.level} ${turret.type === 'sniper' ? 'Sniper' : 'Turret'} (Upgrade: ${cost.metal} Metal)`);
             }
           }
         }
       }
+
+      if (selectedTool === 'quarry' || selectedTool === 'forge') {
+        // Building placement logic
+        const requiredTile = selectedTool === 'quarry' ? 'resource_stone' : 'resource_metal';
+        
+        if (grid[y][x] === requiredTile) {
+           if (buildBuilding(x, y, selectedTool)) {
+             // Don't update grid immediately - wait for drone
+             toast.success(`Construction order placed! Waiting for drone...`);
+           } else {
+             toast.error('Insufficient resources!');
+           }
+        } else {
+          toast.error(`Must build ${selectedTool} on ${selectedTool === 'quarry' ? 'Stone' : 'Metal'} deposit!`);
+        }
+      }
+
       return;
     }
 
@@ -278,7 +324,7 @@ export default function LevelEditor() {
               <Button onClick={saveLevel} className="bg-primary text-primary-foreground hover:bg-primary/90 hazard-border">
                 <Save className="w-4 h-4 mr-2" /> Save Sector
               </Button>
-              <Button onClick={startGame} className="bg-green-600 hover:bg-green-500 text-white ml-4 hazard-border">
+              <Button onClick={startGame} className="bg-green-600 hover:bg-green-700 text-white hazard-border animate-pulse">
                 <Play className="w-4 h-4 mr-2" /> Engage
               </Button>
             </>
@@ -290,270 +336,423 @@ export default function LevelEditor() {
         </div>
       </Card>
 
-      <div className="flex flex-1 gap-6 min-h-0">
+      <div className="flex gap-6 h-full min-h-0">
         {/* Tools Sidebar */}
-        <Card className="w-64 p-4 flex flex-col gap-4 bg-black/80 backdrop-blur-md border-primary/20 overflow-y-auto">
-          <h3 className="text-primary font-bold tracking-widest uppercase border-b border-primary/30 pb-2">
-            {gameState === 'editing' ? 'Construction' : 'Defense Systems'}
-          </h3>
+        <Card className="w-64 p-4 panel flex flex-col gap-4 bg-black/80 backdrop-blur-md border-primary/20 overflow-y-auto">
+          <div className="flex items-center gap-2 pb-2 border-b border-border">
+            <Wrench className="w-4 h-4 text-primary" />
+            <h2 className="font-mono text-sm tracking-widest text-primary">CONSTRUCTION</h2>
+          </div>
           
           <div className="grid grid-cols-2 gap-2">
-            {(['empty', 'wall', 'path', 'base', 'spawn'] as const).map((tool) => (
-              gameState === 'editing' && (
-                <Button
-                  key={tool}
-                  variant={selectedTool === tool ? "default" : "outline"}
-                  className={`
-                    h-24 flex flex-col gap-2 relative overflow-hidden transition-all duration-300
-                    ${selectedTool === tool ? 'ring-2 ring-primary ring-offset-2 ring-offset-black' : 'hover:border-primary/50'}
-                  `}
-                  onClick={() => setSelectedTool(tool)}
-                >
-                  <div className={`w-8 h-8 ${TILE_COLORS[tool]} border border-white/10 shadow-lg`} />
-                  <span className="text-xs font-mono uppercase">{tool}</span>
-                  {selectedTool === tool && (
-                    <div className="absolute inset-0 bg-primary/10 animate-pulse" />
-                  )}
-                </Button>
-              )
-            ))}
+            <Button 
+              variant={selectedTool === 'empty' ? 'default' : 'outline'} 
+              className={`h-20 flex flex-col gap-2 ${selectedTool === 'empty' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('empty')}
+            >
+              <div className="w-6 h-6 bg-slate-900 border border-slate-700" />
+              <span className="text-xs font-mono">EMPTY</span>
+            </Button>
+            
+            <Button 
+              variant={selectedTool === 'wall' ? 'default' : 'outline'} 
+              className={`h-20 flex flex-col gap-2 ${selectedTool === 'wall' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('wall')}
+            >
+              <div className="w-6 h-6 bg-slate-800 border border-slate-600" />
+              <span className="text-xs font-mono">WALL</span>
+            </Button>
 
-            {/* Game Tools */}
-            {gameState === 'playing' && (
-              <>
-                <Button
-                  variant={selectedTool === 'turret' ? "default" : "outline"}
-                  className={`h-24 flex flex-col gap-2 ${selectedTool === 'turret' ? 'ring-2 ring-primary' : ''}`}
-                  onClick={() => setSelectedTool('turret')}
-                >
-                  <div className={`w-8 h-8 ${TILE_COLORS.turret}`} />
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs font-mono uppercase">Turret</span>
-                    <span className="text-[10px] text-yellow-500">{TURRET_COST} CR</span>
-                  </div>
-                </Button>
+            <Button 
+              variant={selectedTool === 'path' ? 'default' : 'outline'} 
+              className={`h-20 flex flex-col gap-2 ${selectedTool === 'path' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('path')}
+            >
+              <div className="w-6 h-6 bg-slate-700" />
+              <span className="text-xs font-mono">PATH</span>
+            </Button>
 
-                <Button
-                  variant={selectedTool === 'sniper' ? "default" : "outline"}
-                  className={`h-24 flex flex-col gap-2 ${selectedTool === 'sniper' ? 'ring-2 ring-primary' : ''}`}
-                  onClick={() => setSelectedTool('sniper')}
-                >
-                  <div className={`w-8 h-8 ${TILE_COLORS.sniper}`} />
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs font-mono uppercase">Sniper</span>
-                    <span className="text-[10px] text-purple-400">{SNIPER_COST} CR</span>
-                  </div>
-                </Button>
+            <Button 
+              variant={selectedTool === 'base' ? 'default' : 'outline'} 
+              className={`h-20 flex flex-col gap-2 ${selectedTool === 'base' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('base')}
+            >
+              <div className="w-6 h-6 bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.5)]" />
+              <span className="text-xs font-mono">BASE</span>
+            </Button>
 
-                <Button
-                  variant={selectedTool === 'sell' ? "destructive" : "outline"}
-                  className={`h-24 flex flex-col gap-2 ${selectedTool === 'sell' ? 'ring-2 ring-destructive' : ''}`}
-                  onClick={() => setSelectedTool('sell')}
-                >
-                  <div className="w-8 h-8 bg-destructive/20 flex items-center justify-center rounded border border-destructive">
-                    <span className="text-xs">✕</span>
-                  </div>
-                  <span className="text-xs font-mono uppercase">Sell</span>
-                </Button>
+            <Button 
+              variant={selectedTool === 'spawn' ? 'default' : 'outline'} 
+              className={`h-20 flex flex-col gap-2 ${selectedTool === 'spawn' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('spawn')}
+            >
+              <div className="w-6 h-6 bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]" />
+              <span className="text-xs font-mono">SPAWN</span>
+            </Button>
 
-                <Button
-                  variant={selectedTool === 'repair' ? "default" : "outline"}
-                  className={`h-24 flex flex-col gap-2 ${selectedTool === 'repair' ? 'ring-2 ring-blue-500' : ''}`}
-                  onClick={() => setSelectedTool('repair')}
-                >
-                  <div className="w-8 h-8 bg-blue-500/20 flex items-center justify-center rounded border border-blue-500">
-                    <Wrench className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-mono uppercase">Repair</span>
-                </Button>
-              </>
-            )}
+            <Button 
+              variant={selectedTool === 'resource_stone' ? 'default' : 'outline'} 
+              className={`h-20 flex flex-col gap-2 ${selectedTool === 'resource_stone' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('resource_stone')}
+            >
+              <div className="w-6 h-6 bg-stone-400" />
+              <span className="text-xs font-mono">STONE</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'resource_metal' ? 'default' : 'outline'} 
+              className={`h-20 flex flex-col gap-2 ${selectedTool === 'resource_metal' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('resource_metal')}
+            >
+              <div className="w-6 h-6 bg-cyan-700" />
+              <span className="text-xs font-mono">METAL</span>
+            </Button>
           </div>
 
-          {gameState === 'playing' && (
-            <div className="mt-auto pt-4 border-t border-border">
-              <div className="space-y-2 font-mono text-xs text-slate-400">
-                <div className="flex justify-between">
-                  <span>WAVE</span>
-                  <span className="text-primary">{wave}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>LIVES</span>
-                  <span className={lives < 5 ? "text-destructive animate-pulse" : "text-primary"}>{lives}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>CREDITS</span>
-                  <span className="text-yellow-500">{money}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>SCORE</span>
-                  <span className="text-blue-400">{highScore}</span>
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="flex items-center gap-2 pb-2 border-b border-border mt-4">
+            <Pickaxe className="w-4 h-4 text-primary" />
+            <h2 className="font-mono text-sm tracking-widest text-primary">BUILDINGS</h2>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              variant={selectedTool === 'quarry' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'quarry' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('quarry')}
+            >
+              <div className="w-6 h-6 bg-amber-700 rounded-sm" />
+              <span className="text-xs font-mono font-bold">QUARRY</span>
+              <span className="text-[10px] text-slate-400">{QUARRY_COST.stone}S</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'forge' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'forge' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('forge')}
+            >
+              <div className="w-6 h-6 bg-orange-600 rounded-sm" />
+              <span className="text-xs font-mono font-bold">FORGE</span>
+              <span className="text-[10px] text-slate-400">{FORGE_COST.stone}S</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'abandoned_quarry' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'abandoned_quarry' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('abandoned_quarry')}
+            >
+              <div className="w-6 h-6 bg-amber-900/50 rounded-sm border border-amber-700/50" />
+              <span className="text-xs font-mono font-bold text-center">OLD QUARRY</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'abandoned_forge' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'abandoned_forge' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('abandoned_forge')}
+            >
+              <div className="w-6 h-6 bg-orange-900/50 rounded-sm border border-orange-700/50" />
+              <span className="text-xs font-mono font-bold text-center">OLD FORGE</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'turret' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'turret' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('turret')}
+            >
+              <div className="w-6 h-6 bg-yellow-500 rounded-full" />
+              <span className="text-xs font-mono font-bold">TURRET</span>
+              <span className="text-[10px] text-slate-400">{TURRET_COST.metal}M</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'sniper' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'sniper' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('sniper')}
+            >
+              <div className="w-6 h-6 bg-purple-500 rounded-full border-2 border-white/20" />
+              <span className="text-xs font-mono font-bold">SNIPER</span>
+              <span className="text-[10px] text-slate-400">{SNIPER_COST.metal}M</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'drone_factory' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'drone_factory' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('drone_factory')}
+            >
+              <div className="w-6 h-6 bg-indigo-600 rounded-sm" />
+              <span className="text-xs font-mono font-bold">DRONE FAC</span>
+              <span className="text-[10px] text-slate-400">SPAWN</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'abandoned_drone_factory' ? 'default' : 'outline'} 
+              className={`h-24 flex flex-col gap-1 ${selectedTool === 'abandoned_drone_factory' ? 'bg-slate-800 ring-2 ring-primary' : 'bg-slate-900/50'}`}
+              onClick={() => setSelectedTool('abandoned_drone_factory')}
+            >
+              <div className="w-6 h-6 bg-indigo-900/50 rounded-sm border border-indigo-700/50" />
+              <span className="text-xs font-mono font-bold text-center">OLD FACTORY</span>
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2 pb-2 border-b border-border mt-4">
+            <Hammer className="w-4 h-4 text-primary" />
+            <h2 className="font-mono text-sm tracking-widest text-primary">ACTIONS</h2>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              variant={selectedTool === 'sell' ? 'default' : 'outline'} 
+              className={`h-16 flex flex-col gap-1 ${selectedTool === 'sell' ? 'bg-red-900/20 ring-2 ring-red-500' : 'bg-slate-900/50 hover:bg-red-900/10'}`}
+              onClick={() => setSelectedTool('sell')}
+            >
+              <span className="text-xs font-mono text-red-400">RECYCLE</span>
+            </Button>
+
+            <Button 
+              variant={selectedTool === 'repair' ? 'default' : 'outline'} 
+              className={`h-16 flex flex-col gap-1 ${selectedTool === 'repair' ? 'bg-green-900/20 ring-2 ring-green-500' : 'bg-slate-900/50 hover:bg-green-900/10'}`}
+              onClick={() => setSelectedTool('repair')}
+            >
+              <span className="text-xs font-mono text-green-400">REPAIR</span>
+            </Button>
+          </div>
         </Card>
 
         {/* Main Grid Area */}
-        <div className="flex-1 relative bg-black/40 rounded-lg border border-white/5 overflow-hidden flex items-center justify-center p-8">
-          {/* Grid Background Effect */}
-          <div className="absolute inset-0 grid-bg opacity-20 pointer-events-none" />
-          
-          <div 
-            className="grid gap-[1px] bg-border/30 p-[1px] shadow-2xl relative z-10"
-            style={{ 
-              gridTemplateColumns: `repeat(${width}, minmax(2rem, 1fr))`,
-              width: 'fit-content',
-              height: 'fit-content',
-              maxHeight: '100%',
-              maxWidth: '100%',
-              overflow: 'auto'
-            }}
-            onMouseLeave={() => setIsDragging(false)}
-          >
-            {grid.map((row, y) => (
-              row.map((tileType, x) => {
-                const isPath = pathPreview?.some(p => p.x === x && p.y === y);
-                return (
-                  <div
-                    key={`${x}-${y}`}
-                    onMouseDown={() => { 
-                      if (gameState === 'editing') {
-                        setIsDragging(true); 
-                        handleTileClick(x, y); 
-                      } else if (gameState === 'playing') {
-                        // Allow all tools (turret, sniper, sell, repair) to trigger click
-                        handleTileClick(x, y);
-                      }
-                    }}
-                    onMouseEnter={() => {
-                      if (gameState === 'editing') handleMouseEnter(x, y);
-                    }}
-                    onMouseUp={() => setIsDragging(false)}
-                    className={`
-                      w-10 h-10 transition-colors duration-75 relative
-                      ${TILE_COLORS[tileType]}
-                      ${gameState === 'editing' || (gameState === 'playing' && (tileType === 'empty' || tileType === 'wall' || tileType === 'turret' || tileType === 'sniper')) ? 'cursor-pointer hover:brightness-125' : ''}
-                      ${selectedTool === 'sell' && (tileType === 'turret' || tileType === 'sniper') ? 'hover:bg-red-500/50 hover:border-red-500' : ''}
-                      border border-white/5
-                    `}
-                    title={`Coordinates: ${x},${y}`}
-                  >
-                    {/* Path Preview Dot */}
-                    {isPath && tileType === 'empty' && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-2 h-2 rounded-full bg-primary/50 animate-pulse" />
-                      </div>
-                    )}
+        <div className="flex-1 flex flex-col gap-4">
+          {/* HUD */}
+          <div className="flex items-center justify-between bg-black/60 p-4 rounded-lg border border-primary/20 backdrop-blur-sm">
+            <div className="flex items-center gap-8">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Status</span>
+                <span className={`font-mono text-xl ${gameState === 'playing' ? 'text-green-400 animate-pulse' : 'text-yellow-400'}`}>
+                  {gameState === 'playing' ? 'COMBAT ACTIVE' : 'DESIGN MODE'}
+                </span>
+              </div>
+              
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Wave</span>
+                <span className="font-mono text-xl text-white">{wave}</span>
+              </div>
 
-                    {/* Turret Health Bar */}
-                    {(tileType === 'turret' || tileType === 'sniper') && gameState === 'playing' && (() => {
-                      const turret = getTurretAt(x, y);
-                      if (turret && turret.health < turret.maxHealth) {
-                        return (
-                          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/50 rounded-full overflow-hidden z-20 pointer-events-none">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Lives</span>
+                <span className={`font-mono text-xl ${lives < 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  {lives}
+                </span>
+              </div>
+
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Drones</span>
+                <span className="font-mono text-xl text-indigo-400">{drones.length}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-8">
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Stone</span>
+                <span className="font-mono text-2xl text-stone-400 drop-shadow-[0_0_5px_rgba(168,162,158,0.5)]">
+                  {Math.floor(resources?.stone || 0)}
+                </span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest">Metal</span>
+                <span className="font-mono text-2xl text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]">
+                  {Math.floor(resources?.metal || 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Game Grid */}
+          <div className="flex-1 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-center overflow-hidden relative">
+            {gameState === 'gameover' && (
+              <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center animate-in fade-in duration-500">
+                <h1 className="text-6xl font-black text-red-600 tracking-tighter mb-4 glitch-text">MISSION FAILED</h1>
+                <div className="flex flex-col gap-2 text-center mb-8">
+                  <p className="text-slate-400 font-mono">SECTOR OVERRUN AT WAVE {wave}</p>
+                  <p className="text-primary font-mono">HIGHEST WAVE SURVIVED: {highScore}</p>
+                </div>
+                <Button onClick={stopGame} size="lg" className="bg-white text-black hover:bg-slate-200 font-bold tracking-widest">
+                  RETURN TO EDITOR
+                </Button>
+              </div>
+            )}
+
+            <div 
+              className="grid gap-[1px] bg-slate-900/50 p-4 shadow-2xl"
+              style={{
+                gridTemplateColumns: `repeat(${width}, minmax(0, 1fr))`,
+                width: 'fit-content',
+              }}
+              onMouseLeave={() => setIsDragging(false)}
+              onMouseUp={() => setIsDragging(false)}
+            >
+              {grid.map((row, y) => (
+                row.map((tile, x) => {
+                  const turret = getTurretAt(x, y);
+                  const isSelected = selectedTurret?.x === x && selectedTurret?.y === y;
+                  const isVisible = gameState === 'editing' || (visibleTiles[y] && visibleTiles[y][x]);
+                  const job = jobs.find(j => j.x === x && j.y === y);
+                  
+                  return (
+                    <div
+                      key={`${x}-${y}`}
+                      className={`
+                        w-10 h-10 relative transition-all duration-200
+                        ${isVisible ? TILE_COLORS[tile] : 'bg-black'}
+                        ${isVisible && tile === 'empty' ? 'hover:bg-slate-800/50' : ''}
+                        ${isVisible && tile === 'path' && pathPreview?.some(p => p.x === x && p.y === y) ? 'brightness-125 shadow-[inset_0_0_10px_rgba(59,130,246,0.3)]' : ''}
+                        ${isSelected ? 'ring-2 ring-white z-10' : ''}
+                        cursor-pointer
+                      `}
+                      onMouseDown={() => {
+                        setIsDragging(true);
+                        handleTileClick(x, y);
+                      }}
+                      onMouseEnter={() => handleMouseEnter(x, y)}
+                    >
+                      {/* Fog Overlay */}
+                      {!isVisible && (
+                        <div className="absolute inset-0 bg-black z-50 flex items-center justify-center">
+                          <EyeOff className="w-3 h-3 text-slate-800" />
+                        </div>
+                      )}
+
+                      {/* Construction Site Overlay */}
+                      {isVisible && job && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 border border-yellow-500/50 border-dashed">
+                          <div className="w-full h-1 bg-slate-800 absolute bottom-1 left-0">
                             <div 
-                              className="h-full bg-green-500 transition-all duration-200"
-                              style={{ width: `${(turret.health / turret.maxHealth) * 100}%` }}
+                              className="h-full bg-yellow-500 transition-all duration-200"
+                              style={{ width: `${job.progress}%` }}
                             />
                           </div>
-                        );
-                      }
-                      return null;
-                    })()}
+                          <Wrench className="w-4 h-4 text-yellow-500 animate-pulse" />
+                        </div>
+                      )}
 
-                    {/* Turret Range Indicator */}
-                    {selectedTurret && selectedTurret.x === x && selectedTurret.y === y && (
-                      <div 
-                        className="absolute rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 pointer-events-none z-20"
-                        style={{
-                          width: `${(grid[y][x] === 'sniper' ? 7.0 : 3.5) * 2 * 100}%`, // Range * 2 (diameter) * 100% of tile size
-                          height: `${(grid[y][x] === 'sniper' ? 7.0 : 3.5) * 2 * 100}%`,
-                          top: '50%',
-                          left: '50%',
-                          transform: 'translate(-50%, -50%)'
-                        }}
-                      />
-                    )}
+                      {/* Turret Level Indicator */}
+                      {isVisible && turret && (
+                        <div className="absolute top-0 right-0 bg-black/80 text-[8px] px-1 rounded-bl text-white font-mono">
+                          L{turret.level}
+                        </div>
+                      )}
 
-                    {/* Entities Layer */}
-                    {gameState === 'playing' && (
-                      <>
-                        {/* Enemies */}
-                        {enemies.filter(e => Math.floor(e.x) === x && Math.floor(e.y) === y).map(enemy => (
+                      {/* Health Bar */}
+                      {isVisible && turret && turret.health < turret.maxHealth && (
+                        <div className="absolute -top-2 left-0 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                           <div 
-                            key={enemy.id}
-                            className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
-                          >
-                            <div 
-                              className={`w-6 h-6 rounded-full ${ENEMY_STATS[enemy.type].color} shadow-lg border border-white/20 relative`}
+                            className={`h-full transition-all duration-300 ${
+                              turret.health / turret.maxHealth < 0.3 ? 'bg-red-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${(turret.health / turret.maxHealth) * 100}%` }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Range Indicator */}
+                      {isSelected && turret && (
+                        <div 
+                          className="absolute top-1/2 left-1/2 rounded-full border-2 border-white/20 bg-white/5 pointer-events-none z-20"
+                          style={{
+                            width: `${turret.range * 2 * 40}px`, // 40px is tile size
+                            height: `${turret.range * 2 * 40}px`,
+                            transform: 'translate(-50%, -50%)'
+                          }}
+                        />
+                      )}
+
+                      {/* Render Game Entities */}
+                      {gameState === 'playing' && isVisible && (
+                        <>
+                          {/* Drones */}
+                          {drones.filter(d => Math.abs(d.x - x) < 0.5 && Math.abs(d.y - y) < 0.5).map(drone => (
+                            <div
+                              key={drone.id}
+                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
+                              style={{
+                                transform: `translate(${(drone.x - x) * 40}px, ${(drone.y - y) * 40}px)`
+                              }}
                             >
-                              {/* Health Bar */}
-                              <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/50 rounded-full overflow-hidden">
+                              <Bot className={`w-4 h-4 ${drone.state === 'working' ? 'text-yellow-400 animate-bounce' : 'text-indigo-400'}`} />
+                            </div>
+                          ))}
+
+                          {/* Enemies */}
+                          {enemies.filter(e => Math.floor(e.x) === x && Math.floor(e.y) === y).map(enemy => (
+                            <div
+                              key={enemy.id}
+                              className={`absolute inset-0 m-1 rounded-full shadow-lg transition-transform duration-100 z-20 ${ENEMY_STATS[enemy.type].color}`}
+                              style={{
+                                transform: `translate(${(enemy.x - x) * 40}px, ${(enemy.y - y) * 40}px)`
+                              }}
+                            >
+                              {/* Enemy Health Bar */}
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
                                 <div 
-                                  className="h-full bg-green-500 transition-all duration-200"
+                                  className="h-full bg-red-500 transition-all duration-100"
                                   style={{ width: `${(enemy.health / enemy.maxHealth) * 100}%` }}
                                 />
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
 
-                        {/* Projectiles */}
-                        {projectiles.filter(p => Math.floor(p.x) === x && Math.floor(p.y) === y).map(proj => (
-                          <div
-                            key={proj.id}
-                            className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
-                          >
-                            <div className="w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)] animate-ping" />
-                          </div>
-                        ))}
+                          {/* Projectiles */}
+                          {projectiles.filter(p => Math.floor(p.x) === x && Math.floor(p.y) === y).map(proj => (
+                            <div
+                              key={proj.id}
+                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
+                            >
+                              <div className="w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.8)] animate-ping" />
+                            </div>
+                          ))}
 
-                        {/* Particles */}
-                        {particles.filter(p => Math.floor(p.x) === x && Math.floor(p.y) === y).map(p => (
-                          <div
-                            key={p.id}
-                            className="absolute inset-0 flex items-center justify-center pointer-events-none z-40"
-                          >
-                            <div 
-                              className="w-1 h-1 rounded-full"
-                              style={{ 
-                                backgroundColor: p.color,
-                                opacity: p.life,
-                                transform: `translate(${(Math.random() - 0.5) * 20}px, ${(Math.random() - 0.5) * 20}px)`
-                              }} 
-                            />
-                          </div>
-                        ))}
+                          {/* Particles */}
+                          {particles.filter(p => Math.floor(p.x) === x && Math.floor(p.y) === y).map(p => (
+                            <div
+                              key={p.id}
+                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-40"
+                            >
+                              <div 
+                                className="w-1 h-1 rounded-full"
+                                style={{ 
+                                  backgroundColor: p.color,
+                                  opacity: p.life,
+                                  transform: `translate(${(Math.random() - 0.5) * 20}px, ${(Math.random() - 0.5) * 20}px)`
+                                }} 
+                              />
+                            </div>
+                          ))}
 
-                        {/* Damage Numbers */}
-                        {damageNumbers.filter(d => Math.floor(d.x) === x && Math.floor(d.y) === y).map(d => (
-                          <div
-                            key={d.id}
-                            className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
-                            style={{
-                              transform: `translateY(-${(1 - d.life) * 30}px) scale(${d.isCritical ? 1.5 : 1})`,
-                              opacity: d.life
-                            }}
-                          >
-                            <span 
-                              className={`font-bold drop-shadow-md ${d.isCritical ? 'text-sm animate-bounce' : 'text-xs'}`}
-                              style={{ 
-                                color: d.isCritical ? '#fbbf24' : d.color, // Amber-400 for crit
-                                textShadow: d.isCritical ? '0 0 5px rgba(251, 191, 36, 0.8)' : 'none'
+                          {/* Damage Numbers */}
+                          {damageNumbers.filter(d => Math.floor(d.x) === x && Math.floor(d.y) === y).map(d => (
+                            <div
+                              key={d.id}
+                              className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+                              style={{
+                                transform: `translateY(-${(1 - d.life) * 30}px) scale(${d.isCritical ? 1.5 : 1})`,
+                                opacity: d.life
                               }}
                             >
-                              {Math.round(d.value)}
-                              {d.isCritical && '!'}
-                            </span>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                );
-              })
-            ))}
+                              <span 
+                                className={`font-bold drop-shadow-md ${d.isCritical ? 'text-sm animate-bounce' : 'text-xs'}`}
+                                style={{ 
+                                  color: d.isCritical ? '#fbbf24' : d.color, // Amber-400 for crit
+                                  textShadow: d.isCritical ? '0 0 5px rgba(251, 191, 36, 0.8)' : 'none'
+                                }}
+                              >
+                                {Math.round(d.value)}
+                                {d.isCritical && '!'}
+                              </span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  );
+                })
+              ))}
+            </div>
           </div>
         </div>
       </div>
