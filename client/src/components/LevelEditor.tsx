@@ -46,6 +46,7 @@ export default function LevelEditor() {
     getTurretAt,
     sellTurret,
     repairTurret,
+    clearRubble,
     highScore,
     particles
   } = useGameEngine(width, height, grid, pathPreview, (x, y, originalTile) => {
@@ -73,6 +74,15 @@ export default function LevelEditor() {
             newGrid[y][x] = originalTile;
             setGrid(newGrid);
             toast.success(`Turret recycled! +${refundAmount} CR`);
+          }
+        } else if (grid[y][x] === 'rubble') {
+          if (clearRubble(x, y)) {
+            const newGrid = [...grid];
+            newGrid[y][x] = 'empty'; // Or whatever was there before? For now, empty.
+            setGrid(newGrid);
+            toast.success('Rubble cleared!');
+          } else {
+            toast.error('Insufficient credits to clear rubble!');
           }
         }
         return;
@@ -102,7 +112,15 @@ export default function LevelEditor() {
           setSelectedTurret(null);
         }
 
-        if (grid[y][x] === 'empty' || grid[y][x] === 'wall') {
+        if (grid[y][x] === 'empty' || grid[y][x] === 'wall' || grid[y][x] === 'rubble') {
+          // If rubble, try to clear it first (cost included in build or separate?)
+          // For better UX, let's just assume building on rubble clears it for free or includes the cost.
+          // Let's check if we can build.
+          
+          // If it's rubble, we might want to charge the clear cost automatically?
+          // Or just allow building over it if they have enough money for the turret.
+          // Let's keep it simple: building over rubble is allowed and replaces it.
+          
           if (buildTurret(x, y, selectedTool === 'sniper' ? 'sniper' : 'standard')) {
             const newGrid = [...grid];
             newGrid[y][x] = selectedTool;

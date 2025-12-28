@@ -198,12 +198,22 @@ export function useGameEngine(
     const now = performance.now();
     turretsRef.current.forEach(turret => {
       if (now - turret.lastFired >= turret.cooldown) {
-        // Find target
-        const target = nextEnemies.find(e => {
+        // Find target - prioritize tanks (firing enemies)
+        let target = nextEnemies.find(e => {
+          if (e.type !== 'tank') return false;
           const dx = e.x - turret.x;
           const dy = e.y - turret.y;
           return Math.sqrt(dx*dx + dy*dy) <= turret.range;
         });
+
+        // If no tank found, target any enemy
+        if (!target) {
+          target = nextEnemies.find(e => {
+            const dx = e.x - turret.x;
+            const dy = e.y - turret.y;
+            return Math.sqrt(dx*dx + dy*dy) <= turret.range;
+          });
+        }
 
         if (target) {
           turret.lastFired = now;
@@ -231,7 +241,7 @@ export function useGameEngine(
         if (!enemy.attackCooldown) {
           enemy.attackCooldown = 2000;
           enemy.attackRange = 4;
-          enemy.attackDamage = 30;
+          enemy.attackDamage = 15;
           enemy.lastFired = 0;
         }
 
@@ -451,7 +461,7 @@ export function useGameEngine(
         lastFired: 0,
         targetId: null,
         level: 1,
-        originalTile: grid[y][x], // Store what was underneath
+        originalTile: grid[y][x] === 'rubble' ? 'empty' : grid[y][x], // If built on rubble, restore to empty when sold
         health: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
         maxHealth: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
         type
@@ -533,6 +543,15 @@ export function useGameEngine(
     return null;
   };
 
+  const clearRubble = (x: number, y: number) => {
+    const RUBBLE_CLEAR_COST = 10;
+    if (money >= RUBBLE_CLEAR_COST) {
+      setMoney(m => m - RUBBLE_CLEAR_COST);
+      return true;
+    }
+    return false;
+  };
+
   return {
     gameState,
     enemies,
@@ -547,6 +566,7 @@ export function useGameEngine(
     getTurretAt,
     sellTurret,
     repairTurret,
+    clearRubble,
     highScore,
     particles
   };
