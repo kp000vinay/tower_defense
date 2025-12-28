@@ -32,6 +32,39 @@ export default function LevelEditor() {
     });
   }, [width, height]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only active if not typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      switch (e.key.toLowerCase()) {
+        case 's':
+          setSelectedTool('sell');
+          toast.info('Tool: Sell');
+          break;
+        case 'r':
+          setSelectedTool('repair');
+          toast.info('Tool: Repair');
+          break;
+        case 't':
+          setSelectedTool('turret');
+          toast.info('Tool: Standard Turret');
+          break;
+        case 'y': // 'S' is taken, so use 'Y' for Sniper (or maybe 'P' for Precision?)
+          setSelectedTool('sniper');
+          toast.info('Tool: Sniper Turret');
+          break;
+        case 'escape':
+          setSelectedTool('empty'); // Or whatever "no tool" state is appropriate
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const { 
     gameState, 
     enemies, 
