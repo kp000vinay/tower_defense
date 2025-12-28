@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS, QUARRY_COST, FORGE_COST, REPAIR_BUILDING_COST, REPAIR_FACTORY_COST, MAINTENANCE_HUB_COST } from '@/lib/gameTypes';
+import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS, QUARRY_COST, FORGE_COST, REPAIR_BUILDING_COST, REPAIR_FACTORY_COST, MAINTENANCE_HUB_COST, HERO_STATS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
 import { Enemy } from '@/lib/gameTypes';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench, Pickaxe, Hammer, Mountain, Gem, EyeOff, Bot, HeartPulse, ArrowDownCircle } from 'lucide-react';
+import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench, Pickaxe, Hammer, Mountain, Gem, EyeOff, Bot, HeartPulse, ArrowDownCircle, User, Flag, Radio } from 'lucide-react';
 
 export default function LevelEditor() {
   const [levelName, setLevelName] = useState('New Sector');
@@ -88,6 +88,9 @@ export default function LevelEditor() {
     visibleTiles,
     drones,
     jobs,
+    hero,
+    extractionProgress,
+    isExtracting,
     startGame, 
     stopGame,
     buildTurret,
@@ -103,15 +106,7 @@ export default function LevelEditor() {
   } = useGameEngine(width, height, grid, pathPreview, (x, y, originalTile) => {
     setGrid(prev => {
       const newGrid = [...prev];
-      // Set to rubble instead of restoring original tile
-      // Actually, for wreckage mechanic, we keep the tile as is but render it differently
-      // So we don't need to change the grid tile type to 'rubble' anymore for destroyed buildings
-      // UNLESS we want to allow clearing it.
-      // Let's keep the tile type but render an overlay.
-      // BUT, if we want to allow building over it, maybe we should change it?
-      // The prompt says "turn into Wreckage... Repair Drones automatically detect... and begin repairing".
-      // So it should stay as the building type but be "broken".
-      // So we do NOTHING to the grid here.
+      // No grid update needed for wreckage logic
       return newGrid;
     });
   }, (x, y, type) => {
@@ -271,352 +266,405 @@ export default function LevelEditor() {
     }
   };
 
+  const handleMouseDown = (x: number, y: number) => {
+    setIsDragging(true);
+    handleTileClick(x, y);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
   const saveLevel = () => {
     const levelData: LevelData = {
       id: crypto.randomUUID(),
       name: levelName,
       width,
       height,
-      tiles: grid.map((row, y) => row.map((type, x) => ({ x, y, type }))),
+      tiles: grid
     };
     
-    localStorage.setItem(`level-${levelData.id}`, JSON.stringify(levelData));
-    toast.success(`Sector "${levelName}" secure. Data saved.`);
+    const blob = new Blob([JSON.stringify(levelData)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${levelName.replace(/\s+/g, '_').toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Level saved!');
   };
 
-  const clearGrid = () => {
-    if (confirm('WARNING: Purging sector data. Confirm?')) {
-      setGrid(Array(height).fill(null).map(() => Array(width).fill('empty')));
-      setPathPreview(null);
-      toast.success('Sector purged.');
-    }
+  const loadLevel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string) as LevelData;
+        setLevelName(data.name);
+        setWidth(data.width);
+        setHeight(data.height);
+        setGrid(data.tiles);
+        toast.success('Level loaded!');
+      } catch (err) {
+        toast.error('Invalid level file');
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-mono overflow-hidden">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between shrink-0 z-10 shadow-md">
+      <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-cyan-400 tracking-wider flex items-center gap-2">
-            <Grid3X3 className="w-6 h-6" />
-            SECTOR DEFENSE
+          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+            Sector Command
           </h1>
-          <div className="h-6 w-px bg-slate-700 mx-2" />
-          <div className="flex items-center gap-2">
-            <Input 
-              value={levelName} 
-              onChange={(e) => setLevelName(e.target.value)}
-              className="bg-slate-800 border-slate-700 text-slate-200 w-48 h-8 focus:ring-cyan-500/50"
-            />
-            <Button size="sm" variant="outline" onClick={saveLevel} className="h-8 border-slate-700 hover:bg-slate-800 hover:text-cyan-400">
-              <Save className="w-4 h-4 mr-2" /> Save
-            </Button>
-            <Button size="sm" variant="outline" onClick={clearGrid} className="h-8 border-slate-700 hover:bg-red-900/20 hover:text-red-400 hover:border-red-900/50">
-              <Trash2 className="w-4 h-4 mr-2" /> Clear
-            </Button>
-          </div>
+          {gameState === 'editing' && (
+            <div className="flex items-center gap-2">
+              <Input 
+                value={levelName}
+                onChange={(e) => setLevelName(e.target.value)}
+                className="w-48 h-8 bg-slate-800 border-slate-700"
+              />
+              <div className="flex items-center gap-2 text-sm text-slate-400 ml-4">
+                <Grid3X3 className="w-4 h-4" />
+                <span>{width}x{height}</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-6">
-          {/* Resources Display */}
-          <div className="flex items-center gap-4 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-800">
-            <div className="flex items-center gap-2 text-stone-400">
-              <Mountain className="w-4 h-4" />
-              <span className="font-bold">{Math.floor(resources.stone)}</span>
-            </div>
-            <div className="flex items-center gap-2 text-cyan-400">
-              <Gem className="w-4 h-4" />
-              <span className="font-bold">{Math.floor(resources.metal)}</span>
-            </div>
-          </div>
+        <div className="flex items-center gap-3">
+          {gameState === 'editing' ? (
+            <>
+              <Button variant="outline" size="sm" onClick={saveLevel}>
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <div className="relative">
+                <Button variant="outline" size="sm" className="cursor-pointer">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import
+                  <input 
+                    type="file" 
+                    accept=".json"
+                    onChange={loadLevel}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                </Button>
+              </div>
+              <div className="w-px h-6 bg-slate-800 mx-2" />
+              <Button 
+                size="sm" 
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={startGame}
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Deploy Commander
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4 bg-slate-900 px-4 py-1.5 rounded-full border border-slate-800">
+                <div className="flex items-center gap-2 text-red-400">
+                  <HeartPulse className="w-4 h-4" />
+                  <span className="font-mono font-bold">{hero?.health || 0}/{HERO_STATS.maxHealth}</span>
+                </div>
+                <div className="w-px h-4 bg-slate-800" />
+                <div className="flex items-center gap-2 text-stone-400">
+                  <Mountain className="w-4 h-4" />
+                  <span className="font-mono font-bold">{Math.floor(resources.stone)}</span>
+                </div>
+                <div className="w-px h-4 bg-slate-800" />
+                <div className="flex items-center gap-2 text-cyan-400">
+                  <Gem className="w-4 h-4" />
+                  <span className="font-mono font-bold">{Math.floor(resources.metal)}</span>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-slate-400">
-              Wave: <span className="text-cyan-400 font-bold">{wave}</span>
-            </div>
-            <div className="text-sm text-slate-400">
-              Lives: <span className={`${lives < 5 ? 'text-red-500 animate-pulse' : 'text-green-400'} font-bold`}>{lives}</span>
-            </div>
-            <div className="text-sm text-slate-400">
-              Score: <span className="text-yellow-400 font-bold">{highScore}</span>
-            </div>
-          </div>
+              {isExtracting && (
+                <div className="flex flex-col w-48">
+                  <div className="flex justify-between text-xs text-cyan-400 mb-1">
+                    <span>Uplink Status</span>
+                    <span>{Math.floor(extractionProgress)}%</span>
+                  </div>
+                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-cyan-500 animate-pulse"
+                      style={{ width: `${extractionProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
-          <Button 
-            onClick={gameState === 'playing' ? stopGame : startGame}
-            variant={gameState === 'playing' ? "destructive" : "default"}
-            className={`w-32 font-bold tracking-wide transition-all ${gameState === 'playing' ? 'bg-red-600 hover:bg-red-700' : 'bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_15px_rgba(8,145,178,0.5)]'}`}
-          >
-            {gameState === 'playing' ? 'ABORT' : 'DEPLOY'}
-          </Button>
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={stopGame}
+              >
+                Abort Mission
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
         {/* Sidebar Tools */}
-        <aside className="w-72 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-6 overflow-y-auto shrink-0 z-10">
-          {/* Build Tools */}
+        <aside className="w-64 bg-slate-900/50 border-r border-slate-800 p-4 flex flex-col gap-6 overflow-y-auto">
+          {/* Structures */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Infrastructure</h3>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Structures</h3>
             <div className="grid grid-cols-2 gap-2">
-              <ToolButton 
-                active={selectedTool === 'path'} 
-                onClick={() => setSelectedTool('path')}
-                icon={<div className="w-4 h-4 bg-slate-600 rounded-sm" />}
-                label="Path"
-                cost={null}
-              />
               <ToolButton 
                 active={selectedTool === 'wall'} 
                 onClick={() => setSelectedTool('wall')}
-                icon={<div className="w-4 h-4 bg-slate-500 border border-slate-400 rounded-sm" />}
+                icon={<div className="w-4 h-4 bg-slate-500 rounded-sm" />}
                 label="Wall"
-                cost={null}
+                cost="10 Stone"
               />
+              <ToolButton 
+                active={selectedTool === 'path'} 
+                onClick={() => setSelectedTool('path')}
+                icon={<div className="w-4 h-4 bg-slate-700 rounded-sm" />}
+                label="Path"
+                cost="5 Stone"
+              />
+              <ToolButton 
+                active={selectedTool === 'base'} 
+                onClick={() => setSelectedTool('base')}
+                icon={<div className="w-4 h-4 bg-blue-600 rounded-sm" />}
+                label="Crash Site"
+                disabled={gameState === 'playing'}
+              />
+              <ToolButton 
+                active={selectedTool === 'extraction_point'} 
+                onClick={() => setSelectedTool('extraction_point')}
+                icon={<div className="w-4 h-4 bg-cyan-400 rounded-sm" />}
+                label="Extraction"
+                disabled={gameState === 'playing'}
+              />
+            </div>
+          </div>
+
+          {/* Defenses */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Defenses</h3>
+            <div className="grid grid-cols-1 gap-2">
+              <ToolButton 
+                active={selectedTool === 'turret'} 
+                onClick={() => setSelectedTool('turret')}
+                icon={<div className="w-4 h-4 bg-yellow-500 rounded-full" />}
+                label="Sentry Turret"
+                cost="50 Metal"
+                shortcut="T"
+              />
+              <ToolButton 
+                active={selectedTool === 'sniper'} 
+                onClick={() => setSelectedTool('sniper')}
+                icon={<div className="w-4 h-4 bg-purple-500 rounded-full" />}
+                label="Sniper Cannon"
+                cost="120 Metal"
+                shortcut="Y"
+              />
+            </div>
+          </div>
+
+          {/* Economy */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Economy</h3>
+            <div className="grid grid-cols-1 gap-2">
               <ToolButton 
                 active={selectedTool === 'quarry'} 
                 onClick={() => setSelectedTool('quarry')}
-                icon={<Mountain className="w-4 h-4 text-amber-600" />}
-                label="Quarry"
-                cost={QUARRY_COST}
+                icon={<Pickaxe className="w-4 h-4 text-amber-500" />}
+                label="Auto-Quarry"
+                cost="50 Stone"
+                shortcut="Q"
               />
               <ToolButton 
                 active={selectedTool === 'forge'} 
                 onClick={() => setSelectedTool('forge')}
                 icon={<Hammer className="w-4 h-4 text-orange-500" />}
-                label="Forge"
-                cost={FORGE_COST}
+                label="Blast Forge"
+                cost="100 Stone"
+                shortcut="F"
               />
               <ToolButton 
                 active={selectedTool === 'maintenance_hub'} 
                 onClick={() => setSelectedTool('maintenance_hub')}
-                icon={<HeartPulse className="w-4 h-4 text-emerald-500" />}
+                icon={<Bot className="w-4 h-4 text-emerald-500" />}
                 label="Maint. Hub"
-                cost={MAINTENANCE_HUB_COST}
+                cost="100 S / 100 M"
+                shortcut="M"
               />
             </div>
           </div>
 
+          {/* Tools */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Defenses</h3>
-            <div className="grid grid-cols-1 gap-2">
-              <ToolButton 
-                active={selectedTool === 'turret'} 
-                onClick={() => setSelectedTool('turret')}
-                icon={<div className="w-4 h-4 bg-yellow-500 rounded-full border-2 border-yellow-700" />}
-                label="Turret"
-                cost={TURRET_COST}
-              />
-              <ToolButton 
-                active={selectedTool === 'sniper'} 
-                onClick={() => setSelectedTool('sniper')}
-                icon={<div className="w-4 h-4 bg-purple-500 rounded-full border-2 border-purple-700" />}
-                label="Sniper"
-                cost={SNIPER_COST}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Management</h3>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tools</h3>
             <div className="grid grid-cols-2 gap-2">
               <ToolButton 
                 active={selectedTool === 'repair'} 
                 onClick={() => setSelectedTool('repair')}
                 icon={<Wrench className="w-4 h-4 text-green-400" />}
                 label="Repair"
-                cost={null}
+                shortcut="R"
               />
               <ToolButton 
                 active={selectedTool === 'sell'} 
                 onClick={() => setSelectedTool('sell')}
                 icon={<Trash2 className="w-4 h-4 text-red-400" />}
                 label="Recycle"
-                cost={null}
+                shortcut="S"
               />
             </div>
           </div>
 
-          {/* Map Elements (Editor Only) */}
+          {/* Editor Only */}
           {gameState === 'editing' && (
             <div className="space-y-3 pt-4 border-t border-slate-800">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Map Editor</h3>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Map Editor</h3>
               <div className="grid grid-cols-2 gap-2">
-                <ToolButton 
-                  active={selectedTool === 'base'} 
-                  onClick={() => setSelectedTool('base')}
-                  icon={<div className="w-4 h-4 bg-blue-600 rounded-sm" />}
-                  label="Base"
-                  cost={null}
-                />
-                <ToolButton 
-                  active={selectedTool === 'spawn'} 
-                  onClick={() => setSelectedTool('spawn')}
-                  icon={<div className="w-4 h-4 bg-red-600 rounded-sm" />}
-                  label="Spawn"
-                  cost={null}
-                />
                 <ToolButton 
                   active={selectedTool === 'resource_stone'} 
                   onClick={() => setSelectedTool('resource_stone')}
                   icon={<div className="w-4 h-4 bg-stone-400 rounded-sm" />}
-                  label="Stone"
-                  cost={null}
+                  label="Stone Node"
                 />
                 <ToolButton 
                   active={selectedTool === 'resource_metal'} 
                   onClick={() => setSelectedTool('resource_metal')}
                   icon={<div className="w-4 h-4 bg-cyan-700 rounded-sm" />}
-                  label="Metal"
-                  cost={null}
+                  label="Metal Node"
                 />
                 <ToolButton 
                   active={selectedTool === 'abandoned_quarry'} 
                   onClick={() => setSelectedTool('abandoned_quarry')}
                   icon={<div className="w-4 h-4 bg-amber-900/50 rounded-sm" />}
-                  label="Aband. Quarry"
-                  cost={null}
+                  label="Old Quarry"
                 />
                 <ToolButton 
                   active={selectedTool === 'abandoned_forge'} 
                   onClick={() => setSelectedTool('abandoned_forge')}
                   icon={<div className="w-4 h-4 bg-orange-900/50 rounded-sm" />}
-                  label="Aband. Forge"
-                  cost={null}
+                  label="Old Forge"
                 />
                 <ToolButton 
                   active={selectedTool === 'abandoned_drone_factory'} 
                   onClick={() => setSelectedTool('abandoned_drone_factory')}
                   icon={<div className="w-4 h-4 bg-indigo-900/50 rounded-sm" />}
-                  label="Aband. Factory"
-                  cost={null}
-                />
-                <ToolButton 
-                  active={selectedTool === 'empty'} 
-                  onClick={() => setSelectedTool('empty')}
-                  icon={<div className="w-4 h-4 border border-slate-600 rounded-sm" />}
-                  label="Eraser"
-                  cost={null}
+                  label="Old Factory"
                 />
               </div>
             </div>
           )}
         </aside>
 
-        {/* Main Grid Area */}
-        <main className="flex-1 bg-slate-950 relative overflow-auto flex items-center justify-center p-8">
+        {/* Game Area */}
+        <main className="flex-1 bg-slate-950 relative overflow-auto flex items-center justify-center p-8"
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
           <div 
-            className="relative bg-slate-900 shadow-2xl border border-slate-800 select-none"
-            style={{ 
-              width: width * 40, 
+            className="relative bg-slate-900 shadow-2xl rounded-lg overflow-hidden border border-slate-800"
+            style={{
+              width: width * 40,
               height: height * 40,
-              cursor: selectedTool === 'empty' ? 'default' : 'crosshair'
             }}
-            onMouseDown={() => setIsDragging(true)}
-            onMouseUp={() => setIsDragging(false)}
-            onMouseLeave={() => setIsDragging(false)}
           >
-            {/* Grid Tiles */}
+            {/* Grid */}
             {grid.map((row, y) => (
-              row.map((tile, x) => {
-                // Determine if tile is visible (Fog of War)
-                const isVisible = gameState === 'editing' || (visibleTiles[y] && visibleTiles[y][x]);
-                
-                // Check for wreckage status
-                const turret = getTurretAt(x, y);
-                const isWreckage = turret?.isWreckage; 
-                
-                // Check if a repair drone is en route to this tile
-                const isRepairIncoming = drones.some(d => 
-                  d.type === 'repair' && 
-                  d.state === 'moving_to_job' && 
-                  d.targetX === x && 
-                  d.targetY === y
-                );
-                
-                return (
-                  <div
-                    key={`${x}-${y}`}
-                    className={`absolute w-10 h-10 border border-slate-800/50 transition-colors duration-200 flex items-center justify-center
-                      ${isVisible ? TILE_COLORS[tile] : 'bg-black'}
-                      ${!isVisible && gameState === 'playing' ? 'brightness-0' : ''}
-                    `}
-                    style={{ left: x * 40, top: y * 40 }}
-                    onMouseDown={() => handleTileClick(x, y)}
-                    onMouseEnter={() => handleMouseEnter(x, y)}
-                  >
-                    {/* Fog Overlay (Soft edges?) */}
-                    {!isVisible && gameState === 'playing' && (
-                      <div className="absolute inset-0 bg-black z-20" />
-                    )}
-
-                    {/* Wreckage Overlay */}
-                    {isVisible && isWreckage && (
-                      <div className="absolute inset-0 bg-red-900/60 z-10 flex items-center justify-center animate-pulse">
-                        <Wrench className="w-6 h-6 text-red-400 opacity-75" />
-                      </div>
-                    )}
-
-                    {/* Repair Incoming Indicator */}
-                    {isVisible && isRepairIncoming && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 animate-bounce">
-                        <ArrowDownCircle className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_4px_rgba(34,211,238,0.8)]" />
-                      </div>
-                    )}
-
-                    {/* Path Preview Overlay */}
-                    {isVisible && pathPreview?.some(p => p.x === x && p.y === y) && (
-                      <div className="w-2 h-2 bg-cyan-400/50 rounded-full animate-pulse" />
-                    )}
-
-                    {/* Turret Range Preview */}
-                    {isVisible && selectedTurret && selectedTurret.x === x && selectedTurret.y === y && (
+              <div key={y} className="flex">
+                {row.map((tile, x) => {
+                  // Determine visibility
+                  const isVisible = gameState === 'editing' || (visibleTiles[y] && visibleTiles[y][x]);
+                  
+                  // Determine color/content
+                  let tileClass = TILE_COLORS[tile] || 'bg-slate-900';
+                  
+                  // Fog of War
+                  if (!isVisible) {
+                    return (
                       <div 
-                        className="absolute rounded-full border border-cyan-500/30 bg-cyan-500/10 pointer-events-none z-10"
-                        style={{
-                          width: (tile === 'sniper' ? 14 : 7) * 40,
-                          height: (tile === 'sniper' ? 14 : 7) * 40,
-                          left: '50%',
-                          top: '50%',
-                          transform: 'translate(-50%, -50%)'
-                        }}
+                        key={`${x}-${y}`}
+                        className="w-10 h-10 bg-black border border-slate-900/50"
                       />
-                    )}
+                    );
+                  }
 
-                    {/* Construction Site Overlay */}
-                    {isVisible && jobs.some(j => j.x === x && j.y === y && j.status !== 'completed') && (
-                      <div className="absolute inset-0 border-2 border-dashed border-yellow-400 bg-yellow-400/10 z-10 flex items-center justify-center">
-                        <div className="w-full h-1 bg-slate-700 absolute bottom-1 left-0 px-1">
-                          <div 
-                            className="h-full bg-yellow-400 transition-all duration-200"
-                            style={{ width: `${jobs.find(j => j.x === x && j.y === y)?.progress || 0}%` }}
-                          />
+                  // Render Tile
+                  return (
+                    <div
+                      key={`${x}-${y}`}
+                      className={`w-10 h-10 border border-slate-800/50 flex items-center justify-center relative ${tileClass} cursor-pointer hover:brightness-110 transition-all duration-75`}
+                      onMouseDown={() => handleMouseDown(x, y)}
+                      onMouseEnter={() => handleMouseEnter(x, y)}
+                    >
+                      {/* Icons for specific tiles */}
+                      {tile === 'base' && <Flag className="w-6 h-6 text-white" />}
+                      {tile === 'extraction_point' && <Radio className="w-6 h-6 text-white animate-pulse" />}
+                      {tile === 'spawn' && <EyeOff className="w-6 h-6 text-white/50" />}
+                      {tile === 'quarry' && <Pickaxe className="w-5 h-5 text-amber-200" />}
+                      {tile === 'forge' && <Hammer className="w-5 h-5 text-orange-200" />}
+                      {tile === 'drone_factory' && <Bot className="w-5 h-5 text-indigo-200" />}
+                      {tile === 'maintenance_hub' && <Wrench className="w-5 h-5 text-emerald-200" />}
+                      {tile === 'wreckage' && <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center"><Wrench className="w-6 h-6 text-red-400 animate-pulse" /></div>}
+                      
+                      {/* Repair Incoming Indicator */}
+                      {gameState === 'playing' && drones.some(d => d.type === 'repair' && d.state === 'moving_to_job' && d.targetX === x && d.targetY === y) && (
+                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20 animate-bounce">
+                          <ArrowDownCircle className="w-6 h-6 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
                         </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ))}
 
-            {/* Entities Layer (Enemies, Projectiles, Particles) */}
+            {/* Game Entities Layer */}
             {gameState === 'playing' && (
-              <div className="absolute inset-0 pointer-events-none z-20">
+              <div className="absolute inset-0 pointer-events-none">
+                {/* Hero */}
+                {hero && hero.health > 0 && (
+                  <div 
+                    className="absolute w-8 h-8 bg-blue-400 rounded-full shadow-[0_0_15px_rgba(96,165,250,0.6)] flex items-center justify-center z-20 transition-transform duration-75"
+                    style={{
+                      left: hero.x * 40 + 6,
+                      top: hero.y * 40 + 6,
+                    }}
+                  >
+                    <User className="w-5 h-5 text-white" />
+                    {/* Health Bar */}
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-10 h-1 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500"
+                        style={{ width: `${(hero.health / hero.maxHealth) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Enemies */}
                 {enemies.map(enemy => (
                   <div
                     key={enemy.id}
-                    className={`absolute w-6 h-6 rounded-full shadow-lg transition-transform duration-100 flex items-center justify-center ${ENEMY_STATS[enemy.type].color}`}
-                    style={{ 
-                      left: enemy.x * 40 + 7, 
-                      top: enemy.y * 40 + 7,
-                      opacity: visibleTiles[Math.round(enemy.y)]?.[Math.round(enemy.x)] ? 1 : 0 // Hide if in fog
+                    className={`absolute w-6 h-6 rounded-full shadow-lg transition-transform duration-100 z-10 ${enemy.type === 'tank' ? 'w-8 h-8' : ''} ${ENEMY_STATS[enemy.type].color}`}
+                    style={{
+                      left: enemy.x * 40 + (enemy.type === 'tank' ? 4 : 7),
+                      top: enemy.y * 40 + (enemy.type === 'tank' ? 4 : 7),
                     }}
                   >
                     {/* Health Bar */}
-                    <div className="absolute -top-3 left-0 w-full h-1 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="absolute -top-2 left-0 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-green-500 transition-all duration-200"
+                        className="h-full bg-red-400"
                         style={{ width: `${(enemy.health / enemy.maxHealth) * 100}%` }}
                       />
                     </div>
@@ -627,31 +675,30 @@ export default function LevelEditor() {
                 {drones.map(drone => (
                   <div
                     key={drone.id}
-                    className={`absolute w-4 h-4 rounded-sm shadow-md transition-transform duration-100 flex items-center justify-center
-                      ${drone.type === 'worker' ? (drone.state === 'working' ? 'bg-yellow-400' : 'bg-indigo-400') : 'bg-emerald-400'}
-                    `}
-                    style={{ 
-                      left: drone.x * 40 + 12, 
-                      top: drone.y * 40 + 12,
-                      opacity: visibleTiles[Math.round(drone.y)]?.[Math.round(drone.x)] ? 1 : 0
+                    className={`absolute w-3 h-3 rounded-sm shadow-md transition-transform duration-100 z-15 ${drone.type === 'repair' ? 'bg-green-400' : (drone.state === 'working' ? 'bg-yellow-400' : 'bg-indigo-400')}`}
+                    style={{
+                      left: drone.x * 40 + 14,
+                      top: drone.y * 40 + 14,
+                    }}
+                  />
+                ))}
+
+                {/* Construction Sites */}
+                {jobs.map(job => job.status !== 'completed' && (
+                  <div
+                    key={job.id}
+                    className="absolute w-10 h-10 border-2 border-dashed border-yellow-400 bg-yellow-400/10 flex items-center justify-center z-0"
+                    style={{
+                      left: job.x * 40,
+                      top: job.y * 40,
                     }}
                   >
-                    {drone.type === 'worker' ? <Bot className="w-3 h-3 text-slate-900" /> : <HeartPulse className="w-3 h-3 text-slate-900" />}
-                    
-                    {/* Repair Beam */}
-                    {drone.state === 'working' && drone.type === 'repair' && drone.targetX !== null && (
-                      <svg className="absolute top-1/2 left-1/2 w-[200px] h-[200px] -translate-x-1/2 -translate-y-1/2 pointer-events-none overflow-visible">
-                        <line 
-                          x1="50%" y1="50%" 
-                          x2={`${(drone.targetX - drone.x) * 40 + 100}px`} 
-                          y2={`${(drone.targetY - drone.y) * 40 + 100}px`} 
-                          stroke="#10b981" 
-                          strokeWidth="2" 
-                          strokeDasharray="4 2"
-                          className="animate-pulse"
-                        />
-                      </svg>
-                    )}
+                    <div className="w-8 h-1 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-yellow-400"
+                        style={{ width: `${job.progress}%` }}
+                      />
+                    </div>
                   </div>
                 ))}
 
@@ -659,28 +706,10 @@ export default function LevelEditor() {
                 {projectiles.map(proj => (
                   <div
                     key={proj.id}
-                    className={`absolute w-2 h-2 rounded-full ${proj.isCritical ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] scale-125' : 'bg-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.8)]'}`}
-                    style={{ 
-                      left: proj.x * 40 + 15, 
-                      top: proj.y * 40 + 15,
-                      opacity: visibleTiles[Math.round(proj.y)]?.[Math.round(proj.x)] ? 1 : 0
-                    }}
-                  />
-                ))}
-
-                {/* Particles */}
-                {particles.map(p => (
-                  <div
-                    key={p.id}
-                    className="absolute rounded-full"
+                    className={`absolute w-2 h-2 rounded-full shadow-sm z-20 ${proj.source === 'hero' ? 'bg-blue-400' : (proj.source === 'enemy' ? 'bg-red-400' : 'bg-yellow-300')}`}
                     style={{
-                      left: p.x * 40 + 20,
-                      top: p.y * 40 + 20,
-                      width: p.size * 40,
-                      height: p.size * 40,
-                      backgroundColor: p.color,
-                      opacity: p.life,
-                      transform: 'translate(-50%, -50%)'
+                      left: proj.x * 40 + 15,
+                      top: proj.y * 40 + 15,
                     }}
                   />
                 ))}
@@ -689,15 +718,14 @@ export default function LevelEditor() {
                 {damageNumbers.map(dn => (
                   <div
                     key={dn.id}
-                    className={`absolute font-bold text-center pointer-events-none select-none ${dn.isCritical ? 'text-lg z-30' : 'text-xs z-20'}`}
-                    style={{ 
-                      left: dn.x * 40, 
-                      top: dn.y * 40,
-                      width: 40,
+                    className="absolute text-xs font-bold z-30 pointer-events-none select-none"
+                    style={{
+                      left: dn.x * 40 + 10,
+                      top: dn.y * 40 - 10,
                       color: dn.color,
                       opacity: dn.life,
-                      transform: `translateY(${(1 - dn.life) * -20}px) ${dn.isCritical ? 'scale(1.2)' : ''}`,
-                      textShadow: dn.isCritical ? '0 0 4px rgba(0,0,0,0.5)' : 'none'
+                      transform: `translateY(-${(1 - dn.life) * 20}px) ${dn.isCritical ? 'scale(1.5)' : 'scale(1)'}`,
+                      textShadow: dn.isCritical ? '0 0 4px rgba(251, 191, 36, 0.8)' : 'none'
                     }}
                   >
                     {Math.round(dn.value)}
@@ -709,25 +737,51 @@ export default function LevelEditor() {
           </div>
         </main>
       </div>
+
+      {/* Game Over / Victory Overlay */}
+      {(gameState === 'gameover' || gameState === 'victory') && (
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+          <Card className="w-96 p-8 bg-slate-900 border-slate-700 text-center space-y-6">
+            <h2 className={`text-3xl font-bold ${gameState === 'victory' ? 'text-green-400' : 'text-red-500'}`}>
+              {gameState === 'victory' ? 'MISSION ACCOMPLISHED' : 'MISSION FAILED'}
+            </h2>
+            <p className="text-slate-400">
+              {gameState === 'victory' 
+                ? "Data uplink established. Extraction complete." 
+                : "Commander signal lost. Reinforcements unavailable."}
+            </p>
+            <div className="text-xl font-mono">
+              Score: <span className="text-white">{Math.floor(resources.metal + resources.stone)}</span>
+            </div>
+            <Button className="w-full" onClick={stopGame}>
+              Return to Command
+            </Button>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
 
-function ToolButton({ active, onClick, icon, label, cost }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, cost: { stone: number, metal: number } | null }) {
+function ToolButton({ active, onClick, icon, label, cost, shortcut, disabled }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, cost?: string, shortcut?: string, disabled?: boolean }) {
   return (
-    <Button
-      variant={active ? "default" : "outline"}
-      className={`h-auto flex flex-col items-center justify-center gap-1 py-2 px-1 ${active ? 'bg-cyan-600 hover:bg-cyan-500 border-cyan-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-600'}`}
+    <button
       onClick={onClick}
+      disabled={disabled}
+      className={`
+        flex flex-col items-start p-2 rounded-md border transition-all w-full
+        ${active 
+          ? 'bg-blue-600/20 border-blue-500 text-blue-100' 
+          : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+      `}
     >
-      {icon}
-      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-      {cost && (
-        <div className="flex gap-1 text-[9px] opacity-80">
-          {cost.stone > 0 && <span className="text-stone-400">{cost.stone}S</span>}
-          {cost.metal > 0 && <span className="text-cyan-400">{cost.metal}M</span>}
-        </div>
-      )}
-    </Button>
+      <div className="flex items-center justify-between w-full mb-1">
+        {icon}
+        {shortcut && <span className="text-[10px] font-mono opacity-50 bg-slate-900 px-1 rounded">{shortcut}</span>}
+      </div>
+      <span className="text-xs font-medium">{label}</span>
+      {cost && <span className="text-[10px] opacity-70">{cost}</span>}
+    </button>
   );
 }

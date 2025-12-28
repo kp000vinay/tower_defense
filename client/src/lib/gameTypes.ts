@@ -1,4 +1,4 @@
-export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper' | 'rubble' | 'resource_stone' | 'resource_metal' | 'quarry' | 'forge' | 'abandoned_quarry' | 'abandoned_forge' | 'drone_factory' | 'abandoned_drone_factory' | 'maintenance_hub' | 'wreckage';
+export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper' | 'rubble' | 'resource_stone' | 'resource_metal' | 'quarry' | 'forge' | 'abandoned_quarry' | 'abandoned_forge' | 'drone_factory' | 'abandoned_drone_factory' | 'maintenance_hub' | 'wreckage' | 'extraction_point';
 
 export interface Tile {
   x: number;
@@ -33,6 +33,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   abandoned_drone_factory: 'bg-indigo-900/50',
   maintenance_hub: 'bg-emerald-600',
   wreckage: 'bg-red-900/50',
+  extraction_point: 'bg-cyan-400 animate-pulse',
 };
 
 export const DEFAULT_WIDTH = 20;
@@ -56,7 +57,7 @@ export interface Enemy {
   attackDamage?: number;
   attackCooldown?: number;
   targetId?: string | null; // ID of the building/turret they are targeting
-  targetType?: 'turret' | 'building' | 'base';
+  targetType?: 'turret' | 'building' | 'base' | 'hero';
   path?: {x: number, y: number}[]; // Dynamic path to target
 }
 
@@ -72,7 +73,7 @@ export const TURRET_STATS = {
   sniperHealth: 150,
 };
 
-export type GameState = 'editing' | 'playing' | 'paused' | 'gameover';
+export type GameState = 'editing' | 'playing' | 'paused' | 'gameover' | 'victory';
 
 export interface Wave {
   count: number;
@@ -116,7 +117,7 @@ export interface Projectile {
   targetId: string; // Can be enemy ID or turret ID
   speed: number;
   damage: number;
-  source: 'turret' | 'enemy';
+  source: 'turret' | 'enemy' | 'hero';
   isCritical?: boolean;
 }
 
@@ -125,7 +126,6 @@ export interface Particle {
   x: number;
   y: number;
   vx: number;
-  vy: number;
   vy: number;
   life: number; // 0 to 1
   maxLife: number;
@@ -197,3 +197,28 @@ export interface RepairJob {
   y: number;
   assignedDroneId: string | null;
 }
+
+// Hero System
+export interface Hero {
+  x: number;
+  y: number;
+  health: number;
+  maxHealth: number;
+  speed: number;
+  damage: number;
+  range: number;
+  cooldown: number;
+  lastFired: number;
+  isMoving: boolean;
+  direction: 'up' | 'down' | 'left' | 'right';
+}
+
+export const HERO_STATS = {
+  maxHealth: 500,
+  speed: 4.0,
+  damage: 25,
+  range: 4,
+  cooldown: 500, // ms
+};
+
+export const EXTRACTION_TIME = 60; // Seconds to hold the connection
