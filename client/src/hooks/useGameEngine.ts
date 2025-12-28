@@ -95,43 +95,36 @@ export function useGameEngine(
     enemiesRef.current = [];
   }, []);
 
-  // Keep a ref to the latest updateGame function to avoid stale closures
-  const updateGameRef = useRef<(dt: number) => void>(() => {});
-  
-  useEffect(() => {
-    updateGameRef.current = updateGame;
-  });
-
-  // Main Game Loop
-  useEffect(() => {
-    if (gameState !== 'playing') {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-      return;
-    }
-
-    const loop = (timestamp: number) => {
-      if (!lastTickRef.current) lastTickRef.current = timestamp;
-      const deltaTime = timestamp - lastTickRef.current;
-
-      if (deltaTime >= TICK_MS) {
-        // Call the latest version of updateGame
-        updateGameRef.current(deltaTime);
-        lastTickRef.current = timestamp;
-      }
-
-      frameRef.current = requestAnimationFrame(loop);
+  const spawnEnemy = (startPos: {x: number, y: number}) => {
+    // Pick random type from current wave pool
+    const type = currentWave.types[Math.floor(Math.random() * currentWave.types.length)];
+    const stats = ENEMY_STATS[type];
+    
+    // Scale stats by wave number
+    const healthMultiplier = 1 + (wave - 1) * 0.2;
+    
+    const newEnemy: Enemy = {
+      id: crypto.randomUUID(),
+      type,
+      x: startPos.x,
+      y: startPos.y,
+      pathIndex: 1,
+      speed: stats.speed,
+      health: stats.health * healthMultiplier,
+      maxHealth: stats.health * healthMultiplier,
+      reward: stats.reward
     };
+    enemiesRef.current.push(newEnemy);
+  };
 
-    frameRef.current = requestAnimationFrame(loop);
-
-    return () => {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    };
-  }, [gameState]);
-
+  // Define updateGame BEFORE it is used in useEffect
   const updateGame = (deltaTime: number) => {
     const path = pathRef.current;
     if (!path) return;
+
+    // Initialize nextProjectiles at the start of the function
+    const nextProjectiles: Projectile[] = [];
+    let moneyEarned = 0;
 
     // Spawning Logic
     if (enemiesToSpawnRef.current > 0) {
@@ -270,9 +263,6 @@ export function useGameEngine(
     });
 
     // Projectile Logic
-    const nextProjectiles: Projectile[] = [];
-    let moneyEarned = 0;
-
     // Spawn explosion particles
     const spawnExplosion = (x: number, y: number, color: string, count: number) => {
       for (let i = 0; i < count; i++) {
@@ -393,6 +383,40 @@ export function useGameEngine(
     setParticles([...nextParticles]);
   };
 
+  // Keep a ref to the latest updateGame function to avoid stale closures
+  const updateGameRef = useRef<(dt: number) => void>(() => {});
+  
+  useEffect(() => {
+    updateGameRef.current = updateGame;
+  });
+
+  // Main Game Loop
+  useEffect(() => {
+    if (gameState !== 'playing') {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      return;
+    }
+
+    const loop = (timestamp: number) => {
+      if (!lastTickRef.current) lastTickRef.current = timestamp;
+      const deltaTime = timestamp - lastTickRef.current;
+
+      if (deltaTime >= TICK_MS) {
+        // Call the latest version of updateGame
+        updateGameRef.current(deltaTime);
+        lastTickRef.current = timestamp;
+      }
+
+      frameRef.current = requestAnimationFrame(loop);
+    };
+
+    frameRef.current = requestAnimationFrame(loop);
+
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, [gameState]);
+
   const buildTurret = (x: number, y: number) => {
     if (money >= TURRET_COST) {
       setMoney(m => m - TURRET_COST);
@@ -471,28 +495,6 @@ export function useGameEngine(
       return turret.originalTile;
     }
     return null;
-  };
-
-  const spawnEnemy = (startPos: {x: number, y: number}) => {
-    // Pick random type from current wave pool
-    const type = currentWave.types[Math.floor(Math.random() * currentWave.types.length)];
-    const stats = ENEMY_STATS[type];
-    
-    // Scale stats by wave number
-    const healthMultiplier = 1 + (wave - 1) * 0.2;
-    
-    const newEnemy: Enemy = {
-      id: crypto.randomUUID(),
-      type,
-      x: startPos.x,
-      y: startPos.y,
-      pathIndex: 1,
-      speed: stats.speed,
-      health: stats.health * healthMultiplier,
-      maxHealth: stats.health * healthMultiplier,
-      reward: stats.reward
-    };
-    enemiesRef.current.push(newEnemy);
   };
 
   return {
