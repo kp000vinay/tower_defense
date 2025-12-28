@@ -402,7 +402,8 @@ export default function LevelEditor() {
                       if (gameState === 'editing') {
                         setIsDragging(true); 
                         handleTileClick(x, y); 
-                      } else if (gameState === 'playing' && selectedTool === 'turret') {
+                      } else if (gameState === 'playing') {
+                        // Allow all tools (turret, sniper, sell, repair) to trigger click
                         handleTileClick(x, y);
                       }
                     }}
