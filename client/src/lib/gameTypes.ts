@@ -99,6 +99,7 @@ export interface Particle {
   y: number;
   vx: number;
   vy: number;
+  vy: number;
   life: number; // 0 to 1
   maxLife: number;
   color: string;
@@ -110,3 +111,12 @@ export const SNIPER_COST = 120;
 export const UPGRADE_COST = 75;
 export const SNIPER_UPGRADE_COST = 150;
 export const KILL_REWARD = 10;
+
+export interface DamageNumber {
+  id: string;
+  x: number;
+  y: number;
+  value: number;
+  life: number; // 0 to 1
+  color: string;
+}

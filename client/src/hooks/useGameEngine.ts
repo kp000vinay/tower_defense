@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, DamageNumber, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -16,6 +16,7 @@ export function useGameEngine(
   const [enemies, setEnemies] = useState<Enemy[]>([]);
   const [projectiles, setProjectiles] = useState<Projectile[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [damageNumbers, setDamageNumbers] = useState<DamageNumber[]>([]);
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(20);
   const [money, setMoney] = useState(100);
@@ -37,6 +38,7 @@ export function useGameEngine(
   const turretsRef = useRef<TurretEntity[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const damageNumbersRef = useRef<DamageNumber[]>([]);
   const pathRef = useRef<{x: number, y: number}[] | null>(null);
   const frameRef = useRef<number>(0);
   const lastTickRef = useRef<number>(0);
@@ -59,8 +61,10 @@ export function useGameEngine(
     setWave(1);
     setEnemies([]);
     setProjectiles([]);
+    setDamageNumbers([]);
     enemiesRef.current = [];
     projectilesRef.current = [];
+    damageNumbersRef.current = [];
     
     // Initialize turrets from grid
     turretsRef.current = [];
@@ -276,6 +280,18 @@ export function useGameEngine(
     });
 
     // Projectile Logic
+    // Spawn damage number
+    const spawnDamageNumber = (x: number, y: number, value: number, color: string) => {
+      damageNumbersRef.current.push({
+        id: crypto.randomUUID(),
+        x,
+        y,
+        value,
+        life: 1.0,
+        color
+      });
+    };
+
     // Spawn explosion particles
     const spawnExplosion = (x: number, y: number, color: string, count: number) => {
       for (let i = 0; i < count; i++) {
@@ -314,6 +330,7 @@ export function useGameEngine(
         if (dist <= moveDist) {
           hit = true;
           target.health -= proj.damage;
+          spawnDamageNumber(target.x, target.y, proj.damage, '#ff4444');
           if (target.health <= 0) {
             moneyEarned += target.reward;
             spawnExplosion(target.x, target.y, ENEMY_STATS[target.type].color.replace('bg-', 'text-'), 12);
@@ -339,6 +356,7 @@ export function useGameEngine(
         if (dist <= moveDist) {
           hit = true;
           target.health -= proj.damage;
+          spawnDamageNumber(target.x, target.y, proj.damage, '#ffaa00');
           spawnExplosion(proj.x, proj.y, 'text-blue-400', 5);
           
           if (target.health <= 0) {
@@ -404,12 +422,22 @@ export function useGameEngine(
     });
     particlesRef.current = nextParticles;
 
+    // Update Damage Numbers
+    const nextDamageNumbers: DamageNumber[] = [];
+    damageNumbersRef.current.forEach(d => {
+      d.y -= 1.0 * (deltaTime / 1000); // Float up
+      d.life -= (deltaTime / 1000) / 0.8; // 0.8s lifetime
+      if (d.life > 0) nextDamageNumbers.push(d);
+    });
+    damageNumbersRef.current = nextDamageNumbers;
+
     enemiesRef.current = nextEnemies;
     projectilesRef.current = nextProjectiles;
     
     setEnemies([...nextEnemies]);
     setProjectiles([...nextProjectiles]);
     setParticles([...nextParticles]);
+    setDamageNumbers([...nextDamageNumbers]);
   };
 
   // Keep a ref to the latest updateGame function to avoid stale closures
@@ -568,6 +596,7 @@ export function useGameEngine(
     repairTurret,
     clearRubble,
     highScore,
-    particles
+    particles,
+    damageNumbers
   };
 }

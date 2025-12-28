@@ -72,6 +72,7 @@ export default function LevelEditor() {
     lives, 
     money, 
     projectiles,
+    damageNumbers,
     startGame, 
     stopGame,
     buildTurret,
@@ -522,6 +523,25 @@ export default function LevelEditor() {
                                 transform: `translate(${(Math.random() - 0.5) * 20}px, ${(Math.random() - 0.5) * 20}px)`
                               }} 
                             />
+                          </div>
+                        ))}
+
+                        {/* Damage Numbers */}
+                        {damageNumbers.filter(d => Math.floor(d.x) === x && Math.floor(d.y) === y).map(d => (
+                          <div
+                            key={d.id}
+                            className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+                            style={{
+                              transform: `translateY(-${(1 - d.life) * 20}px)`,
+                              opacity: d.life
+                            }}
+                          >
+                            <span 
+                              className="text-xs font-bold drop-shadow-md"
+                              style={{ color: d.color }}
+                            >
+                              {Math.round(d.value)}
+                            </span>
                           </div>
                         ))}
                       </>
