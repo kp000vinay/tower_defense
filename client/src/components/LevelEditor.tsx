@@ -169,34 +169,34 @@ export default function LevelEditor() {
   return (
     <div className="flex flex-col h-full gap-6 p-4">
       {/* Control Panel */}
-      <Card className="p-4 panel flex flex-wrap items-center gap-4 justify-between bg-card/90 backdrop-blur-md border-primary/20">
+      <Card className="p-4 panel flex flex-wrap items-center gap-4 justify-between bg-black/80 backdrop-blur-md border-primary/20">
         <div className="flex items-center gap-4">
           <div className="flex flex-col">
-            <label className="text-xs text-muted-foreground uppercase tracking-widest font-mono">Sector ID</label>
+            <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Sector ID</label>
             <Input 
               value={levelName} 
               onChange={(e) => setLevelName(e.target.value)} 
-              className="w-64 font-mono bg-background/50 border-primary/30 focus:border-primary"
+              className="w-64 font-mono bg-black/50 border-primary/30 focus:border-primary"
             />
           </div>
           
           <div className="flex items-center gap-2 border-l border-border pl-4">
             <div className="flex flex-col w-20">
-              <label className="text-xs text-muted-foreground uppercase tracking-widest font-mono">Width</label>
+              <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Width</label>
               <Input 
                 type="number" 
                 value={width} 
                 onChange={(e) => setWidth(Number(e.target.value))}
-                className="font-mono bg-background/50"
+                className="font-mono bg-black/50"
               />
             </div>
             <div className="flex flex-col w-20">
-              <label className="text-xs text-muted-foreground uppercase tracking-widest font-mono">Height</label>
+              <label className="text-xs text-slate-400 uppercase tracking-widest font-mono">Height</label>
               <Input 
                 type="number" 
                 value={height} 
                 onChange={(e) => setHeight(Number(e.target.value))}
-                className="font-mono bg-background/50"
+                className="font-mono bg-black/50"
               />
             </div>
           </div>
@@ -288,13 +288,13 @@ export default function LevelEditor() {
             {gameState === 'playing' && (
               <div className="col-span-2 mt-2 p-2 bg-primary/10 border border-primary/30 rounded text-xs text-center">
                 <p className="text-primary font-bold mb-1">UPGRADE SYSTEM</p>
-                <p className="text-muted-foreground">Click existing turret to upgrade</p>
+                <p className="text-slate-400">Click existing turret to upgrade</p>
                 <p className="text-yellow-500 font-mono">{UPGRADE_COST} CR</p>
               </div>
             )}
           </div>
 
-          <div className="mt-auto p-4 bg-black/20 border border-white/5 rounded text-xs font-mono text-muted-foreground">
+          <div className="mt-auto p-4 bg-black/20 border border-white/5 rounded text-xs font-mono text-slate-400">
             <p className="mb-2 text-primary">STATUS: {gameState === 'playing' ? 'COMBAT ACTIVE' : 'EDITING'}</p>
             
             {/* Large Credit Display */}
