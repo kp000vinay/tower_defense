@@ -95,6 +95,13 @@ export function useGameEngine(
     enemiesRef.current = [];
   }, []);
 
+  // Keep a ref to the latest updateGame function to avoid stale closures
+  const updateGameRef = useRef<(dt: number) => void>(() => {});
+  
+  useEffect(() => {
+    updateGameRef.current = updateGame;
+  });
+
   // Main Game Loop
   useEffect(() => {
     if (gameState !== 'playing') {
@@ -107,7 +114,8 @@ export function useGameEngine(
       const deltaTime = timestamp - lastTickRef.current;
 
       if (deltaTime >= TICK_MS) {
-        updateGame(deltaTime);
+        // Call the latest version of updateGame
+        updateGameRef.current(deltaTime);
         lastTickRef.current = timestamp;
       }
 
