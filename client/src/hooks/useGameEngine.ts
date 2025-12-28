@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, TURRET_COST, UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -65,20 +65,22 @@ export function useGameEngine(
     turretsRef.current = [];
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (grid[y][x] === 'turret') {
+        if (grid[y][x] === 'turret' || grid[y][x] === 'sniper') {
+          const isSniper = grid[y][x] === 'sniper';
           turretsRef.current.push({
             id: crypto.randomUUID(),
             x,
             y,
-            range: 3.5,
-            damage: 20,
-            cooldown: 800, // ms
+            range: isSniper ? 7.0 : 3.5,
+            damage: isSniper ? 100 : 20,
+            cooldown: isSniper ? 2000 : 800, // ms
             lastFired: 0,
             targetId: null,
             level: 1,
             originalTile: 'empty', // Default for pre-placed turrets
-            health: TURRET_STATS.baseHealth,
-            maxHealth: TURRET_STATS.baseHealth
+            health: isSniper ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
+            maxHealth: isSniper ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
+            type: isSniper ? 'sniper' : 'standard'
           });
         }
       }
@@ -417,23 +419,25 @@ export function useGameEngine(
     };
   }, [gameState]);
 
-  const buildTurret = (x: number, y: number) => {
-    if (money >= TURRET_COST) {
-      setMoney(m => m - TURRET_COST);
+  const buildTurret = (x: number, y: number, type: 'standard' | 'sniper' = 'standard') => {
+    const cost = type === 'sniper' ? SNIPER_COST : TURRET_COST;
+    if (money >= cost) {
+      setMoney(m => m - cost);
       // Add to ref immediately for gameplay
       turretsRef.current.push({
         id: crypto.randomUUID(),
         x,
         y,
-        range: 3.5,
-        damage: 20,
-        cooldown: 800,
+        range: type === 'sniper' ? 7.0 : 3.5,
+        damage: type === 'sniper' ? 100 : 20,
+        cooldown: type === 'sniper' ? 2000 : 800,
         lastFired: 0,
         targetId: null,
         level: 1,
         originalTile: grid[y][x], // Store what was underneath
-        health: TURRET_STATS.baseHealth,
-        maxHealth: TURRET_STATS.baseHealth
+        health: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
+        maxHealth: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
+        type
       });
       return true;
     }
@@ -442,12 +446,24 @@ export function useGameEngine(
 
   const upgradeTurret = (x: number, y: number) => {
     const turret = turretsRef.current.find(t => t.x === x && t.y === y);
-    if (turret && money >= UPGRADE_COST) {
-      setMoney(m => m - UPGRADE_COST);
+    if (!turret) return false;
+    
+    const cost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
+    
+    if (money >= cost) {
+      setMoney(m => m - cost);
       turret.level += 1;
-      turret.damage += 10;
-      turret.range += 0.5;
-      turret.cooldown = Math.max(100, turret.cooldown - 50);
+      
+      if (turret.type === 'sniper') {
+        turret.damage += 50;
+        turret.range += 1.0;
+        turret.cooldown = Math.max(1000, turret.cooldown - 100);
+      } else {
+        turret.damage += 10;
+        turret.range += 0.5;
+        turret.cooldown = Math.max(100, turret.cooldown - 50);
+      }
+      
       turret.maxHealth += 50;
       turret.health = turret.maxHealth; // Heal on upgrade
       return true;
@@ -487,7 +503,10 @@ export function useGameEngine(
     if (index !== -1) {
       const turret = turretsRef.current[index];
       // Refund 50% of base cost + 50% of upgrades
-      const totalValue = TURRET_COST + (turret.level - 1) * UPGRADE_COST;
+      const baseCost = turret.type === 'sniper' ? SNIPER_COST : TURRET_COST;
+      const upgradeCost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
+      
+      const totalValue = baseCost + (turret.level - 1) * upgradeCost;
       const refund = Math.floor(totalValue * 0.5);
       
       setMoney(m => m + refund);

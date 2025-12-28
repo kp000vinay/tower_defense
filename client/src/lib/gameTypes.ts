@@ -1,4 +1,4 @@
-export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret';
+export type TileType = 'empty' | 'path' | 'wall' | 'base' | 'spawn' | 'turret' | 'sniper';
 
 export interface Tile {
   x: number;
@@ -21,6 +21,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   base: 'bg-blue-600',
   spawn: 'bg-red-600',
   turret: 'bg-yellow-500',
+  sniper: 'bg-purple-500',
 };
 
 export const DEFAULT_WIDTH = 20;
@@ -54,6 +55,7 @@ export const ENEMY_STATS: Record<EnemyType, { health: number; speed: number; rew
 export const TURRET_STATS = {
   baseHealth: 200,
   repairCostPerHp: 0.5, // 1 credit repairs 2 HP
+  sniperHealth: 150,
 };
 
 export type GameState = 'editing' | 'playing' | 'paused' | 'gameover';
@@ -77,6 +79,7 @@ export interface TurretEntity {
   originalTile: TileType;
   health: number;
   maxHealth: number;
+  type: 'standard' | 'sniper';
 }
 
 export interface Projectile {
@@ -102,5 +105,7 @@ export interface Particle {
 }
 
 export const TURRET_COST = 50;
+export const SNIPER_COST = 120;
 export const UPGRADE_COST = 75;
+export const SNIPER_UPGRADE_COST = 150;
 export const KILL_REWARD = 10;

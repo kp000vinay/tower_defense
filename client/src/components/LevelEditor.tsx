@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, UPGRADE_COST, ENEMY_STATS } from '@/lib/gameTypes';
+import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
 import { Enemy } from '@/lib/gameTypes';
@@ -69,24 +69,25 @@ export default function LevelEditor() {
         return;
       }
 
-      if (selectedTool === 'turret') {
+      if (selectedTool === 'turret' || selectedTool === 'sniper') {
         if (grid[y][x] === 'empty' || grid[y][x] === 'wall') {
-          if (buildTurret(x, y)) {
+          if (buildTurret(x, y, selectedTool === 'sniper' ? 'sniper' : 'standard')) {
             const newGrid = [...grid];
-            newGrid[y][x] = 'turret';
+            newGrid[y][x] = selectedTool;
             setGrid(newGrid);
-            toast.success('Turret deployed!');
+            toast.success(`${selectedTool === 'sniper' ? 'Sniper' : 'Turret'} deployed!`);
           } else {
             toast.error('Insufficient credits!');
           }
-        } else if (grid[y][x] === 'turret') {
+        } else if (grid[y][x] === 'turret' || grid[y][x] === 'sniper') {
           // Upgrade logic
           if (upgradeTurret(x, y)) {
             toast.success('Turret upgraded!');
           } else {
             const turret = getTurretAt(x, y);
             if (turret) {
-              toast.info(`Level ${turret.level} Turret (Upgrade: ${UPGRADE_COST} CR)`);
+              const cost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
+              toast.info(`Level ${turret.level} ${turret.type === 'sniper' ? 'Sniper' : 'Turret'} (Upgrade: ${cost} CR)`);
             }
           }
         }
@@ -211,22 +212,23 @@ export default function LevelEditor() {
           <h3 className="text-lg font-bold text-primary border-b border-primary/30 pb-2">Construction</h3>
           
           <div className="grid grid-cols-2 gap-2">
-            {(['empty', 'wall', 'path', 'base', 'spawn', 'turret'] as TileType[]).map((type) => (
+            {(['empty', 'wall', 'path', 'base', 'spawn', 'turret', 'sniper'] as TileType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => setSelectedTool(type)}
-                disabled={gameState === 'playing' && type !== 'turret'}
+                disabled={gameState === 'playing' && type !== 'turret' && type !== 'sniper'}
                 className={`
                   p-3 flex flex-col items-center justify-center gap-2 border transition-all
                   ${selectedTool === type 
                     ? 'border-primary bg-primary/10 shadow-[0_0_10px_rgba(var(--primary),0.3)]' 
                     : 'border-border hover:border-primary/50 hover:bg-accent/5'}
-                  ${gameState === 'playing' && type !== 'turret' ? 'opacity-30 cursor-not-allowed' : ''}
+                  ${gameState === 'playing' && type !== 'turret' && type !== 'sniper' ? 'opacity-30 cursor-not-allowed' : ''}
                 `}
               >
                 <div className={`w-8 h-8 ${TILE_COLORS[type]} border border-white/10 shadow-inner`} />
                 <span className="text-xs uppercase font-mono tracking-wider">{type}</span>
                 {type === 'turret' && <span className="text-[10px] text-yellow-500 font-bold">{TURRET_COST} CR</span>}
+                {type === 'sniper' && <span className="text-[10px] text-purple-400 font-bold">{SNIPER_COST} CR</span>}
               </button>
             ))}
             
@@ -340,22 +342,28 @@ export default function LevelEditor() {
                     className={`
                       w-10 h-10 transition-colors duration-75 relative
                       ${TILE_COLORS[tileType]}
-                      ${gameState === 'editing' || (gameState === 'playing' && (tileType === 'empty' || tileType === 'wall' || tileType === 'turret')) ? 'cursor-pointer hover:brightness-125' : ''}
-                      ${selectedTool === 'sell' && tileType === 'turret' ? 'hover:bg-red-500/50 hover:border-red-500' : ''}
+                      ${gameState === 'editing' || (gameState === 'playing' && (tileType === 'empty' || tileType === 'wall' || tileType === 'turret' || tileType === 'sniper')) ? 'cursor-pointer hover:brightness-125' : ''}
+                      ${selectedTool === 'sell' && (tileType === 'turret' || tileType === 'sniper') ? 'hover:bg-red-500/50 hover:border-red-500' : ''}
                       border border-white/5
                     `}
                     title={`Coordinates: ${x},${y}`}
                   >
-                    {tileType === 'turret' && gameState === 'playing' && (
+                    {(tileType === 'turret' || tileType === 'sniper') && gameState === 'playing' && (
                       <>
-                        <div className="absolute top-0 right-0 text-[8px] font-bold text-black bg-yellow-500 px-1 rounded-bl z-10">
+                        <div className={`absolute top-0 right-0 text-[8px] font-bold text-black ${tileType === 'sniper' ? 'bg-purple-500' : 'bg-yellow-500'} px-1 rounded-bl z-10`}>
                           LVL {getTurretAt(x, y)?.level || 1}
                         </div>
                         {/* Sell Preview Tooltip */}
                         {selectedTool === 'sell' && (
                           <div className="absolute inset-0 bg-red-500/30 flex items-center justify-center z-20 group">
                             <span className="text-[8px] font-bold text-white bg-black/80 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                              +{Math.floor((TURRET_COST + ((getTurretAt(x, y)?.level || 1) - 1) * UPGRADE_COST) * 0.5)}
+                              +{(() => {
+                                const t = getTurretAt(x, y);
+                                if (!t) return 0;
+                                const baseCost = t.type === 'sniper' ? SNIPER_COST : TURRET_COST;
+                                const upgradeCost = t.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
+                                return Math.floor((baseCost + (t.level - 1) * upgradeCost) * 0.5);
+                              })()}
                             </span>
                           </div>
                         )}
