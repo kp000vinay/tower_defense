@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { TileType, Enemy, GameState, Wave, TurretEntity, Projectile, Particle, DamageNumber, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS } from '@/lib/gameTypes';
+import { TileType, Enemy, GameState, Wave, TurretEntity, BuildingEntity, Projectile, Particle, DamageNumber, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS, Resources, QUARRY_COST, FORGE_COST, WALL_COST, PATH_COST, REPAIR_BUILDING_COST, FOG_RADIUS, REPAIR_FACTORY_COST, Drone, ConstructionJob } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 
 const TICK_RATE = 60; // FPS
@@ -10,7 +10,8 @@ export function useGameEngine(
   height: number, 
   grid: TileType[][],
   pathPreview: {x: number, y: number}[] | null,
-  onTurretDestroyed?: (x: number, y: number, originalTile: TileType) => void
+  onTurretDestroyed?: (x: number, y: number, originalTile: TileType) => void,
+  onJobComplete?: (x: number, y: number, type: TileType) => void
 ) {
   const [gameState, setGameState] = useState<GameState>('editing');
   const [enemies, setEnemies] = useState<Enemy[]>([]);
@@ -19,8 +20,11 @@ export function useGameEngine(
   const [damageNumbers, setDamageNumbers] = useState<DamageNumber[]>([]);
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(20);
-  const [money, setMoney] = useState(100);
+  const [resources, setResources] = useState<Resources>({ stone: 50, metal: 20 }); // Start with just enough to repair
   const [highScore, setHighScore] = useState(0);
+  const [visibleTiles, setVisibleTiles] = useState<boolean[][]>([]);
+  const [drones, setDrones] = useState<Drone[]>([]);
+  const [jobs, setJobs] = useState<ConstructionJob[]>([]);
   const [currentWave, setCurrentWave] = useState<Wave>({
     count: 5,
     interval: 1500,
@@ -36,9 +40,12 @@ export function useGameEngine(
   // Refs for mutable state in game loop
   const enemiesRef = useRef<Enemy[]>([]);
   const turretsRef = useRef<TurretEntity[]>([]);
+  const buildingsRef = useRef<BuildingEntity[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const damageNumbersRef = useRef<DamageNumber[]>([]);
+  const dronesRef = useRef<Drone[]>([]);
+  const jobsRef = useRef<ConstructionJob[]>([]);
   const pathRef = useRef<{x: number, y: number}[] | null>(null);
   const frameRef = useRef<number>(0);
   const lastTickRef = useRef<number>(0);
@@ -50,28 +57,88 @@ export function useGameEngine(
     pathRef.current = pathPreview;
   }, [pathPreview]);
 
+  // Fog of War Logic
+  const updateVisibility = useCallback(() => {
+    const newVisible = Array(height).fill(null).map(() => Array(width).fill(false));
+    
+    const reveal = (cx: number, cy: number, radius: number) => {
+      for (let y = Math.max(0, cy - radius); y <= Math.min(height - 1, cy + radius); y++) {
+        for (let x = Math.max(0, cx - radius); x <= Math.min(width - 1, cx + radius); x++) {
+          if (Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2)) <= radius) {
+            newVisible[y][x] = true;
+          }
+        }
+      }
+    };
+
+    // Reveal around base
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (grid[y][x] === 'base') {
+          reveal(x, y, FOG_RADIUS);
+        }
+        // Reveal around active buildings and turrets
+        if (grid[y][x] === 'quarry' || grid[y][x] === 'forge' || grid[y][x] === 'turret' || grid[y][x] === 'sniper' || grid[y][x] === 'drone_factory') {
+          reveal(x, y, FOG_RADIUS - 1);
+        }
+        // Reveal path
+        if (grid[y][x] === 'path') {
+          reveal(x, y, 2);
+        }
+      }
+    }
+    
+    setVisibleTiles(newVisible);
+  }, [grid, width, height]);
+
+  // Update visibility when grid changes
+  useEffect(() => {
+    updateVisibility();
+  }, [grid, updateVisibility]);
+
   const startGame = useCallback(() => {
+    // Check if spawn is visible/discovered
+    let spawnFound = false;
+    for(let y=0; y<height; y++) {
+      for(let x=0; x<width; x++) {
+        if (grid[y][x] === 'spawn' && visibleTiles[y][x]) {
+          spawnFound = true;
+        }
+      }
+    }
+
+    if (!spawnFound) {
+      alert("Enemy spawn point not yet discovered! Explore more.");
+      return;
+    }
+
     if (!pathRef.current) {
       alert("No valid path from Spawn to Base!");
       return;
     }
     setGameState('playing');
     setLives(20);
-    setMoney(100);
+    // Keep current resources
     setWave(1);
     setEnemies([]);
     setProjectiles([]);
     setDamageNumbers([]);
+    setDrones([]);
+    setJobs([]);
     enemiesRef.current = [];
     projectilesRef.current = [];
     damageNumbersRef.current = [];
+    dronesRef.current = [];
+    jobsRef.current = [];
     
-    // Initialize turrets from grid
+    // Initialize turrets and buildings from grid
     turretsRef.current = [];
+    buildingsRef.current = [];
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (grid[y][x] === 'turret' || grid[y][x] === 'sniper') {
-          const isSniper = grid[y][x] === 'sniper';
+        const tile = grid[y][x];
+        if (tile === 'turret' || tile === 'sniper') {
+          const isSniper = tile === 'sniper';
           turretsRef.current.push({
             id: crypto.randomUUID(),
             x,
@@ -87,6 +154,33 @@ export function useGameEngine(
             maxHealth: isSniper ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
             type: isSniper ? 'sniper' : 'standard'
           });
+        } else if (tile === 'quarry' || tile === 'forge' || tile === 'drone_factory') {
+          buildingsRef.current.push({
+            id: crypto.randomUUID(),
+            x,
+            y,
+            type: tile,
+            health: 100,
+            maxHealth: 100,
+            productionRate: tile === 'quarry' ? 2 : 1, // Quarry: 2 stone/sec, Forge: 1 metal/sec
+            lastProduced: 0
+          });
+          
+          // Spawn initial drones for factory
+          if (tile === 'drone_factory') {
+            for(let i=0; i<3; i++) {
+              dronesRef.current.push({
+                id: crypto.randomUUID(),
+                x,
+                y,
+                targetX: null,
+                targetY: null,
+                state: 'idle',
+                jobId: null,
+                speed: 3.0
+              });
+            }
+          }
         }
       }
     }
@@ -94,7 +188,7 @@ export function useGameEngine(
     // Setup first wave
     enemiesToSpawnRef.current = 5;
     spawnTimerRef.current = 0;
-  }, [grid, width, height]);
+  }, [grid, width, height, visibleTiles]);
 
   const stopGame = useCallback(() => {
     setGameState('editing');
@@ -131,7 +225,21 @@ export function useGameEngine(
 
     // Initialize nextProjectiles at the start of the function
     const nextProjectiles: Projectile[] = [];
-    let moneyEarned = 0;
+    let stoneEarned = 0;
+    let metalEarned = 0;
+
+    // Resource Production
+    const now = performance.now();
+    buildingsRef.current.forEach(building => {
+      if (now - building.lastProduced >= 1000) { // Produce every second
+        if (building.type === 'quarry') {
+          stoneEarned += building.productionRate;
+        } else if (building.type === 'forge') {
+          metalEarned += building.productionRate;
+        }
+        building.lastProduced = now;
+      }
+    });
 
     // Spawning Logic
     if (enemiesToSpawnRef.current > 0) {
@@ -199,7 +307,6 @@ export function useGameEngine(
     });
 
     // Turret Logic
-    const now = performance.now();
     turretsRef.current.forEach(turret => {
       if (now - turret.lastFired >= turret.cooldown) {
         // Find target - prioritize tanks (firing enemies)
@@ -314,7 +421,7 @@ export function useGameEngine(
           life: 1.0,
           maxLife: Math.random() * 0.3 + 0.2, // 0.2-0.5s lifetime
           color,
-          size: Math.random() * 0.15 + 0.05
+          size: Math.random() * 3 + 2
         });
       }
     };
@@ -340,7 +447,8 @@ export function useGameEngine(
           target.health -= proj.damage;
           spawnDamageNumber(target.x, target.y, proj.damage, '#ff4444', proj.isCritical);
           if (target.health <= 0) {
-            moneyEarned += target.reward;
+            // Bounty logic - maybe enemies drop small amounts of metal?
+            metalEarned += Math.floor(target.reward / 2); 
             spawnExplosion(target.x, target.y, ENEMY_STATS[target.type].color.replace('bg-', 'text-'), 12);
             nextEnemies = nextEnemies.filter(e => e.id !== target.id);
           }
@@ -376,15 +484,6 @@ export function useGameEngine(
               const destroyedTurret = turretsRef.current[idx];
               turretsRef.current.splice(idx, 1);
               
-              // We need to update the grid to remove the turret visually
-              // Since we can't easily update the grid state from inside the game loop ref,
-              // we'll add a "destroyed" event to a queue or handle it via a callback if possible.
-              // For now, we'll rely on the fact that the grid state is passed in, but we can't mutate it directly.
-              // However, the LevelEditor component renders based on the grid state.
-              // We need to expose a way to notify the parent component about grid changes.
-              
-              // Ideally, we should have a callback for grid updates.
-              // Since we don't have that yet, we'll add a `destroyedTurrets` state or callback.
               if (onTurretDestroyed) {
                 onTurretDestroyed(destroyedTurret.x, destroyedTurret.y, destroyedTurret.originalTile);
               }
@@ -416,8 +515,11 @@ export function useGameEngine(
       });
     }
 
-    if (moneyEarned > 0) {
-      setMoney(m => m + moneyEarned);
+    if (stoneEarned > 0 || metalEarned > 0) {
+      setResources(r => ({
+        stone: r.stone + stoneEarned,
+        metal: r.metal + metalEarned
+      }));
     }
 
     // Update Particles
@@ -439,6 +541,119 @@ export function useGameEngine(
     });
     damageNumbersRef.current = nextDamageNumbers;
 
+    // Drone Logic
+    dronesRef.current.forEach(drone => {
+      if (drone.state === 'idle') {
+        // Find pending job
+        const job = jobsRef.current.find(j => j.status === 'pending' && !j.assignedDroneId);
+        if (job) {
+          drone.state = 'moving_to_job';
+          drone.jobId = job.id;
+          drone.targetX = job.x;
+          drone.targetY = job.y;
+          job.assignedDroneId = drone.id;
+          job.status = 'in_progress';
+        }
+      } else if (drone.state === 'moving_to_job') {
+        if (drone.targetX !== null && drone.targetY !== null) {
+          const dx = drone.targetX - drone.x;
+          const dy = drone.targetY - drone.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          const moveDist = drone.speed * (deltaTime / 1000);
+          
+          if (dist <= moveDist) {
+            drone.x = drone.targetX;
+            drone.y = drone.targetY;
+            drone.state = 'working';
+          } else {
+            drone.x += (dx / dist) * moveDist;
+            drone.y += (dy / dist) * moveDist;
+          }
+        }
+      } else if (drone.state === 'working') {
+        const job = jobsRef.current.find(j => j.id === drone.jobId);
+        if (job) {
+          job.progress += (deltaTime / 1000) * 20; // 20% per second
+          if (job.progress >= 100) {
+            job.status = 'completed';
+            drone.state = 'returning';
+            // Find factory to return to
+            const factory = buildingsRef.current.find(b => b.type === 'drone_factory');
+            if (factory) {
+              drone.targetX = factory.x;
+              drone.targetY = factory.y;
+            } else {
+              // No factory? Just stay put
+              drone.state = 'idle';
+              drone.jobId = null;
+            }
+            
+            // Complete construction
+            if (onJobComplete) {
+              let tileType: TileType = 'turret';
+              if (job.type === 'build_sniper') tileType = 'sniper';
+              else if (job.type === 'build_quarry') tileType = 'quarry';
+              else if (job.type === 'build_forge') tileType = 'forge';
+              
+              onJobComplete(job.x, job.y, tileType);
+              
+              // Add to entities
+              if (job.type === 'build_turret' || job.type === 'build_sniper') {
+                const isSniper = job.type === 'build_sniper';
+                turretsRef.current.push({
+                  id: crypto.randomUUID(),
+                  x: job.x,
+                  y: job.y,
+                  range: isSniper ? 7.0 : 3.5,
+                  damage: isSniper ? 100 : 20,
+                  cooldown: isSniper ? 2000 : 800,
+                  lastFired: 0,
+                  targetId: null,
+                  level: 1,
+                  originalTile: 'empty',
+                  health: isSniper ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
+                  maxHealth: isSniper ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
+                  type: isSniper ? 'sniper' : 'standard'
+                });
+              } else {
+                const type = job.type === 'build_quarry' ? 'quarry' : 'forge';
+                buildingsRef.current.push({
+                  id: crypto.randomUUID(),
+                  x: job.x,
+                  y: job.y,
+                  type,
+                  health: 100,
+                  maxHealth: 100,
+                  productionRate: type === 'quarry' ? 2 : 1,
+                  lastProduced: performance.now()
+                });
+              }
+            }
+          }
+        }
+      } else if (drone.state === 'returning') {
+        if (drone.targetX !== null && drone.targetY !== null) {
+          const dx = drone.targetX - drone.x;
+          const dy = drone.targetY - drone.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          const moveDist = drone.speed * (deltaTime / 1000);
+          
+          if (dist <= moveDist) {
+            drone.x = drone.targetX;
+            drone.y = drone.targetY;
+            drone.state = 'idle';
+            drone.jobId = null;
+          } else {
+            drone.x += (dx / dist) * moveDist;
+            drone.y += (dy / dist) * moveDist;
+          }
+        }
+      }
+    });
+    
+    // Cleanup completed jobs
+    jobsRef.current = jobsRef.current.filter(j => j.status !== 'completed');
+
     enemiesRef.current = nextEnemies;
     projectilesRef.current = nextProjectiles;
     
@@ -446,6 +661,8 @@ export function useGameEngine(
     setProjectiles([...nextProjectiles]);
     setParticles([...nextParticles]);
     setDamageNumbers([...nextDamageNumbers]);
+    setDrones([...dronesRef.current]);
+    setJobs([...jobsRef.current]);
   };
 
   // Keep a ref to the latest updateGame function to avoid stale closures
@@ -484,27 +701,101 @@ export function useGameEngine(
 
   const buildTurret = (x: number, y: number, type: 'standard' | 'sniper' = 'standard') => {
     const cost = type === 'sniper' ? SNIPER_COST : TURRET_COST;
-    if (money >= cost) {
-      setMoney(m => m - cost);
-      // Add to ref immediately for gameplay
-      turretsRef.current.push({
+    if (resources.metal >= cost.metal && resources.stone >= cost.stone) {
+      setResources(r => ({
+        stone: r.stone - cost.stone,
+        metal: r.metal - cost.metal
+      }));
+      
+      // Create construction job instead of instant build
+      jobsRef.current.push({
         id: crypto.randomUUID(),
         x,
         y,
-        range: type === 'sniper' ? 7.0 : 3.5,
-        damage: type === 'sniper' ? 100 : 20,
-        cooldown: type === 'sniper' ? 2000 : 800,
-        lastFired: 0,
-        targetId: null,
-        level: 1,
-        originalTile: grid[y][x] === 'rubble' ? 'empty' : grid[y][x], // If built on rubble, restore to empty when sold
-        health: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
-        maxHealth: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
-        type
+        type: type === 'sniper' ? 'build_sniper' : 'build_turret',
+        progress: 0,
+        totalWork: 100,
+        assignedDroneId: null,
+        status: 'pending',
+        cost
       });
+      
       return true;
     }
     return false;
+  };
+
+  const buildBuilding = (x: number, y: number, type: 'quarry' | 'forge') => {
+    const cost = type === 'quarry' ? QUARRY_COST : FORGE_COST;
+    if (resources.metal >= cost.metal && resources.stone >= cost.stone) {
+      setResources(r => ({
+        stone: r.stone - cost.stone,
+        metal: r.metal - cost.metal
+      }));
+      
+      // Create construction job
+      jobsRef.current.push({
+        id: crypto.randomUUID(),
+        x,
+        y,
+        type: type === 'quarry' ? 'build_quarry' : 'build_forge',
+        progress: 0,
+        totalWork: 100,
+        assignedDroneId: null,
+        status: 'pending',
+        cost
+      });
+      
+      return true;
+    }
+    return false;
+  };
+
+  const repairBuilding = (x: number, y: number, type: 'abandoned_quarry' | 'abandoned_forge' | 'abandoned_drone_factory'): TileType | null => {
+    const cost = type === 'abandoned_drone_factory' ? REPAIR_FACTORY_COST : REPAIR_BUILDING_COST;
+    
+    if (resources.metal >= cost.metal && resources.stone >= cost.stone) {
+      setResources(r => ({
+        stone: r.stone - cost.stone,
+        metal: r.metal - cost.metal
+      }));
+      
+      let newType: TileType;
+      if (type === 'abandoned_quarry') newType = 'quarry';
+      else if (type === 'abandoned_forge') newType = 'forge';
+      else newType = 'drone_factory';
+      
+      // Add to active buildings
+      buildingsRef.current.push({
+        id: crypto.randomUUID(),
+        x,
+        y,
+        type: newType as 'quarry' | 'forge' | 'drone_factory',
+        health: 100,
+        maxHealth: 100,
+        productionRate: newType === 'quarry' ? 2 : 1,
+        lastProduced: performance.now()
+      });
+      
+      // Spawn drones if factory
+      if (newType === 'drone_factory') {
+        for(let i=0; i<3; i++) {
+          dronesRef.current.push({
+            id: crypto.randomUUID(),
+            x,
+            y,
+            targetX: null,
+            targetY: null,
+            state: 'idle',
+            jobId: null,
+            speed: 3.0
+          });
+        }
+      }
+      
+      return newType;
+    }
+    return null;
   };
 
   const upgradeTurret = (x: number, y: number) => {
@@ -513,8 +804,11 @@ export function useGameEngine(
     
     const cost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
     
-    if (money >= cost) {
-      setMoney(m => m - cost);
+    if (resources.metal >= cost.metal && resources.stone >= cost.stone) {
+      setResources(r => ({
+        stone: r.stone - cost.stone,
+        metal: r.metal - cost.metal
+      }));
       turret.level += 1;
       
       if (turret.type === 'sniper') {
@@ -538,17 +832,17 @@ export function useGameEngine(
     const turret = turretsRef.current.find(t => t.x === x && t.y === y);
     if (turret && turret.health < turret.maxHealth) {
       const missingHp = turret.maxHealth - turret.health;
-      const cost = Math.ceil(missingHp * TURRET_STATS.repairCostPerHp);
+      const costMetal = Math.ceil(missingHp * TURRET_STATS.repairCostPerHp);
       
-      if (money >= cost) {
-        setMoney(m => m - cost);
+      if (resources.metal >= costMetal) {
+        setResources(r => ({ ...r, metal: r.metal - costMetal }));
         turret.health = turret.maxHealth;
         return true;
       } else {
         // Partial repair
-        const affordableHp = Math.floor(money / TURRET_STATS.repairCostPerHp);
+        const affordableHp = Math.floor(resources.metal / TURRET_STATS.repairCostPerHp);
         if (affordableHp > 0) {
-          setMoney(0);
+          setResources(r => ({ ...r, metal: 0 }));
           turret.health += affordableHp;
           return true;
         }
@@ -569,10 +863,16 @@ export function useGameEngine(
       const baseCost = turret.type === 'sniper' ? SNIPER_COST : TURRET_COST;
       const upgradeCost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
       
-      const totalValue = baseCost + (turret.level - 1) * upgradeCost;
-      const refund = Math.floor(totalValue * 0.5);
+      const totalMetal = baseCost.metal + (turret.level - 1) * upgradeCost.metal;
+      const totalStone = baseCost.stone + (turret.level - 1) * upgradeCost.stone;
       
-      setMoney(m => m + refund);
+      const refundMetal = Math.floor(totalMetal * 0.5);
+      const refundStone = Math.floor(totalStone * 0.5);
+      
+      setResources(r => ({
+        stone: r.stone + refundStone,
+        metal: r.metal + refundMetal
+      }));
       turretsRef.current.splice(index, 1);
       return turret.originalTile;
     }
@@ -580,9 +880,9 @@ export function useGameEngine(
   };
 
   const clearRubble = (x: number, y: number) => {
-    const RUBBLE_CLEAR_COST = 10;
-    if (money >= RUBBLE_CLEAR_COST) {
-      setMoney(m => m - RUBBLE_CLEAR_COST);
+    const RUBBLE_CLEAR_COST = 10; // Metal cost?
+    if (resources.metal >= RUBBLE_CLEAR_COST) {
+      setResources(r => ({ ...r, metal: r.metal - RUBBLE_CLEAR_COST }));
       return true;
     }
     return false;
@@ -593,11 +893,16 @@ export function useGameEngine(
     enemies,
     wave,
     lives,
-    money,
+    resources,
     projectiles,
+    visibleTiles,
+    drones,
+    jobs,
     startGame,
     stopGame,
     buildTurret,
+    buildBuilding,
+    repairBuilding,
     upgradeTurret,
     getTurretAt,
     sellTurret,
