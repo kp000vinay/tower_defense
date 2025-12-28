@@ -321,7 +321,7 @@ export default function LevelEditor() {
         </Card>
 
         {/* Grid Canvas */}
-        <Card className="flex-1 p-8 panel overflow-auto flex items-center justify-center bg-black/40 relative">
+        <Card className="flex-1 p-8 panel overflow-hidden flex items-center justify-center bg-black/40 relative">
           {/* Game Over Overlay */}
           {gameState === 'gameover' && (
             <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-500">
@@ -351,8 +351,11 @@ export default function LevelEditor() {
             className="grid gap-[1px] bg-border/30 p-[1px] shadow-2xl relative z-10"
             style={{ 
               gridTemplateColumns: `repeat(${width}, minmax(2rem, 1fr))`,
+              width: 'fit-content',
+              height: 'fit-content',
+              maxHeight: '100%',
               maxWidth: '100%',
-              maxHeight: '100%'
+              overflow: 'auto'
             }}
             onMouseLeave={() => setIsDragging(false)}
           >
