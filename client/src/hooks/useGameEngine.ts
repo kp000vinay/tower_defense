@@ -9,7 +9,8 @@ export function useGameEngine(
   width: number, 
   height: number, 
   grid: TileType[][],
-  pathPreview: {x: number, y: number}[] | null
+  pathPreview: {x: number, y: number}[] | null,
+  onTurretDestroyed?: (x: number, y: number, originalTile: TileType) => void
 ) {
   const [gameState, setGameState] = useState<GameState>('editing');
   const [enemies, setEnemies] = useState<Enemy[]>([]);
@@ -143,8 +144,8 @@ export function useGameEngine(
         
         // Dynamic Wave Composition
         let types: EnemyType[] = ['standard'];
-        if (nextWave >= 2) types.push('scout');
-        if (nextWave >= 4) types.push('tank');
+        if (nextWave >= 3) types.push('scout');
+        if (nextWave >= 6) types.push('tank');
         
         setCurrentWave(prev => ({
           count: Math.floor(prev.count * 1.2) + 2,
@@ -335,7 +336,23 @@ export function useGameEngine(
             spawnExplosion(target.x, target.y, 'text-orange-500', 20);
             // Remove turret
             const idx = turretsRef.current.findIndex(t => t.id === target.id);
-            if (idx !== -1) turretsRef.current.splice(idx, 1);
+            if (idx !== -1) {
+              const destroyedTurret = turretsRef.current[idx];
+              turretsRef.current.splice(idx, 1);
+              
+              // We need to update the grid to remove the turret visually
+              // Since we can't easily update the grid state from inside the game loop ref,
+              // we'll add a "destroyed" event to a queue or handle it via a callback if possible.
+              // For now, we'll rely on the fact that the grid state is passed in, but we can't mutate it directly.
+              // However, the LevelEditor component renders based on the grid state.
+              // We need to expose a way to notify the parent component about grid changes.
+              
+              // Ideally, we should have a callback for grid updates.
+              // Since we don't have that yet, we'll add a `destroyedTurrets` state or callback.
+              if (onTurretDestroyed) {
+                onTurretDestroyed(destroyedTurret.x, destroyedTurret.y, destroyedTurret.originalTile);
+              }
+            }
           }
         } else {
           proj.x += (dx / dist) * moveDist;
