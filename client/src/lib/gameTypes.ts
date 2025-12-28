@@ -91,6 +91,7 @@ export interface Projectile {
   speed: number;
   damage: number;
   source: 'turret' | 'enemy';
+  isCritical?: boolean;
 }
 
 export interface Particle {
@@ -119,4 +120,5 @@ export interface DamageNumber {
   value: number;
   life: number; // 0 to 1
   color: string;
+  isCritical?: boolean;
 }

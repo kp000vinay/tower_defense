@@ -532,15 +532,19 @@ export default function LevelEditor() {
                             key={d.id}
                             className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
                             style={{
-                              transform: `translateY(-${(1 - d.life) * 20}px)`,
+                              transform: `translateY(-${(1 - d.life) * 30}px) scale(${d.isCritical ? 1.5 : 1})`,
                               opacity: d.life
                             }}
                           >
                             <span 
-                              className="text-xs font-bold drop-shadow-md"
-                              style={{ color: d.color }}
+                              className={`font-bold drop-shadow-md ${d.isCritical ? 'text-sm animate-bounce' : 'text-xs'}`}
+                              style={{ 
+                                color: d.isCritical ? '#fbbf24' : d.color, // Amber-400 for crit
+                                textShadow: d.isCritical ? '0 0 5px rgba(251, 191, 36, 0.8)' : 'none'
+                              }}
                             >
                               {Math.round(d.value)}
+                              {d.isCritical && '!'}
                             </span>
                           </div>
                         ))}
