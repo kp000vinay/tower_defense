@@ -461,7 +461,7 @@ export function useGameEngine(
         lastFired: 0,
         targetId: null,
         level: 1,
-        originalTile: grid[y][x], // Store what was underneath
+        originalTile: grid[y][x] === 'rubble' ? 'empty' : grid[y][x], // If built on rubble, restore to empty when sold
         health: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
         maxHealth: type === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
         type
