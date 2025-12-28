@@ -445,6 +445,22 @@ export default function LevelEditor() {
                       </div>
                     )}
 
+                    {/* Turret Health Bar */}
+                    {(tileType === 'turret' || tileType === 'sniper') && gameState === 'playing' && (() => {
+                      const turret = getTurretAt(x, y);
+                      if (turret && turret.health < turret.maxHealth) {
+                        return (
+                          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/50 rounded-full overflow-hidden z-20 pointer-events-none">
+                            <div 
+                              className="h-full bg-green-500 transition-all duration-200"
+                              style={{ width: `${(turret.health / turret.maxHealth) * 100}%` }}
+                            />
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {/* Turret Range Indicator */}
                     {selectedTurret && selectedTurret.x === x && selectedTurret.y === y && (
                       <div 
