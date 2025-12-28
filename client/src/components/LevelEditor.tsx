@@ -44,6 +44,7 @@ export default function LevelEditor() {
     upgradeTurret,
     getTurretAt,
     sellTurret,
+    repairTurret,
     highScore,
     particles
   } = useGameEngine(width, height, grid, pathPreview);
@@ -64,6 +65,22 @@ export default function LevelEditor() {
             newGrid[y][x] = originalTile;
             setGrid(newGrid);
             toast.success(`Turret recycled! +${refundAmount} CR`);
+          }
+        }
+        return;
+      }
+
+      if (selectedTool === 'repair') {
+        const turret = getTurretAt(x, y);
+        if (turret) {
+          if (turret.health >= turret.maxHealth) {
+            toast.info('Turret is already fully operational.');
+          } else {
+            if (repairTurret(x, y)) {
+              toast.success('Turret repaired!');
+            } else {
+              toast.error('Insufficient credits for repair!');
+            }
           }
         }
         return;
@@ -250,6 +267,24 @@ export default function LevelEditor() {
               <span className="text-xs uppercase font-mono tracking-wider text-red-400">SELL</span>
             </button>
 
+            {/* Repair Tool */}
+            <button
+              onClick={() => setSelectedTool('repair')}
+              disabled={gameState !== 'playing'}
+              className={`
+                p-3 flex flex-col items-center justify-center gap-2 border transition-all
+                ${selectedTool === 'repair' 
+                  ? 'border-green-500 bg-green-500/10 shadow-[0_0_10px_rgba(34,197,94,0.3)]' 
+                  : 'border-border hover:border-green-500/50 hover:bg-green-500/5'}
+                ${gameState !== 'playing' ? 'opacity-30 cursor-not-allowed' : ''}
+              `}
+            >
+              <div className="w-8 h-8 bg-green-900/50 border border-green-500/50 flex items-center justify-center">
+                <Wrench className="w-4 h-4 text-green-500" />
+              </div>
+              <span className="text-xs uppercase font-mono tracking-wider text-green-400">REPAIR</span>
+            </button>
+
             {gameState === 'playing' && (
               <div className="col-span-2 mt-2 p-2 bg-primary/10 border border-primary/30 rounded text-xs text-center">
                 <p className="text-primary font-bold mb-1">UPGRADE SYSTEM</p>
@@ -367,6 +402,31 @@ export default function LevelEditor() {
                             </span>
                           </div>
                         )}
+                        {/* Repair Preview Tooltip */}
+                        {selectedTool === 'repair' && (
+                          <div className="absolute inset-0 bg-green-500/30 flex items-center justify-center z-20 group">
+                            {(() => {
+                              const t = getTurretAt(x, y);
+                              if (!t || t.health >= t.maxHealth) return null;
+                              const missingHp = t.maxHealth - t.health;
+                              const cost = Math.ceil(missingHp * 0.5);
+                              return (
+                                <span className="text-[8px] font-bold text-white bg-black/80 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                  -{cost}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        )}
+                        {/* Health Bar for Turrets */}
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
+                          <div 
+                            className={`h-full transition-all duration-300 ${
+                              (getTurretAt(x, y)?.health || 0) < (getTurretAt(x, y)?.maxHealth || 0) * 0.3 ? 'bg-red-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${((getTurretAt(x, y)?.health || 0) / (getTurretAt(x, y)?.maxHealth || 1)) * 100}%` }}
+                          />
+                        </div>
                       </>
                     )}
                     {isPath && gameState === 'editing' && (
@@ -411,7 +471,9 @@ export default function LevelEditor() {
                 {projectiles.map(proj => (
                   <div
                     key={proj.id}
-                    className="absolute w-2 h-2 bg-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.8)] z-30 pointer-events-none will-change-transform"
+                    className={`absolute w-2 h-2 rounded-full z-30 pointer-events-none will-change-transform
+                      ${proj.source === 'turret' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.8)]' : 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]'}
+                    `}
                     style={{
                       left: `calc(${proj.x} * 100% / ${width} + 50% / ${width})`,
                       top: `calc(${proj.y} * 100% / ${height} + 50% / ${height})`,

@@ -143,8 +143,9 @@ export function useGameEngine(
         
         // Dynamic Wave Composition
         let types: EnemyType[] = ['standard'];
-        if (nextWave >= 2) types.push('scout');
-        if (nextWave >= 4) types.push('tank');
+        if (nextWave >= 2) types.push('striker'); // Strikers appear early (Wave 2)
+        if (nextWave >= 3) types.push('scout');
+        if (nextWave >= 5) types.push('tank');
         
         setCurrentWave(prev => ({
           count: Math.floor(prev.count * 1.2) + 2,
@@ -222,15 +223,22 @@ export function useGameEngine(
       }
     });
 
-    // Enemy Attack Logic (Tanks)
+    // Enemy Attack Logic (Tanks & Strikers)
     enemiesRef.current.forEach(enemy => {
-      if (enemy.type === 'tank') {
+      if (enemy.type === 'tank' || enemy.type === 'striker') {
         const now = Date.now();
         // Initialize attack stats if missing
         if (!enemy.attackCooldown) {
-          enemy.attackCooldown = 2000;
-          enemy.attackRange = 4;
-          enemy.attackDamage = 30;
+          if (enemy.type === 'tank') {
+            enemy.attackCooldown = 2000;
+            enemy.attackRange = 4;
+            enemy.attackDamage = 30;
+          } else {
+            // Striker stats: faster fire, lower damage, shorter range
+            enemy.attackCooldown = 1000;
+            enemy.attackRange = 3;
+            enemy.attackDamage = 10;
+          }
           enemy.lastFired = 0;
         }
 
@@ -255,7 +263,7 @@ export function useGameEngine(
               x: enemy.x,
               y: enemy.y,
               targetId: (targetTurret as TurretEntity).id,
-              speed: 8,
+              speed: enemy.type === 'striker' ? 10 : 8,
               damage: enemy.attackDamage!,
               source: 'enemy'
             });
