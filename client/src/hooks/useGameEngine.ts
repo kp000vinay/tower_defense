@@ -223,6 +223,12 @@ export function useGameEngine(
           turret.lastFired = now;
           turret.targetId = target.id;
           
+          // Calculate critical hit
+          const isSniper = turret.type === 'sniper';
+          const critChance = isSniper ? 0.25 : 0.1; // 25% for sniper, 10% for standard
+          const isCritical = Math.random() < critChance;
+          const damage = isCritical ? Math.floor(turret.damage * 1.5) : turret.damage;
+
           // Spawn projectile
           nextProjectiles.push({
             id: crypto.randomUUID(),
@@ -230,8 +236,9 @@ export function useGameEngine(
             y: turret.y,
             targetId: target.id,
             speed: 12,
-            damage: turret.damage,
-            source: 'turret'
+            damage: damage,
+            source: 'turret',
+            isCritical
           });
         }
       }
@@ -281,14 +288,15 @@ export function useGameEngine(
 
     // Projectile Logic
     // Spawn damage number
-    const spawnDamageNumber = (x: number, y: number, value: number, color: string) => {
+    const spawnDamageNumber = (x: number, y: number, value: number, color: string, isCritical?: boolean) => {
       damageNumbersRef.current.push({
         id: crypto.randomUUID(),
         x,
         y,
         value,
         life: 1.0,
-        color
+        color,
+        isCritical
       });
     };
 
@@ -330,7 +338,7 @@ export function useGameEngine(
         if (dist <= moveDist) {
           hit = true;
           target.health -= proj.damage;
-          spawnDamageNumber(target.x, target.y, proj.damage, '#ff4444');
+          spawnDamageNumber(target.x, target.y, proj.damage, '#ff4444', proj.isCritical);
           if (target.health <= 0) {
             moneyEarned += target.reward;
             spawnExplosion(target.x, target.y, ENEMY_STATS[target.type].color.replace('bg-', 'text-'), 12);
