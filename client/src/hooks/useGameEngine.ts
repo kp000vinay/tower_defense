@@ -21,7 +21,7 @@ export function useGameEngine(
   const [damageNumbers, setDamageNumbers] = useState<DamageNumber[]>([]);
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(1);
-  const [resources, setResources] = useState<Resources>({ stone: 150, metal: 100 }); 
+  const [resources, setResources] = useState<Resources>({ stone: 300, metal: 300 }); 
   const [highScore, setHighScore] = useState(0);
   const [visibleTiles, setVisibleTiles] = useState<boolean[][]>([]);
   const [drones, setDrones] = useState<Drone[]>([]);
@@ -275,21 +275,31 @@ export function useGameEngine(
             maxHealth: isSniper ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
             type: isSniper ? 'sniper' : 'standard',
           });
-        } else if (tile === ('quarry' as TileType) || tile === ('forge' as TileType) || tile === ('drone_factory' as TileType) || tile === ('maintenance_hub' as TileType)) {
+        } else if (tile === ('quarry' as TileType) || tile === ('forge' as TileType) || tile === ('drone_factory' as TileType) || tile === ('maintenance_hub' as TileType) || tile === ('abandoned_drone_factory' as TileType) || tile === ('abandoned_quarry' as TileType) || tile === ('abandoned_forge' as TileType)) {
+          
+          let type: any = tile;
+          let health = 100;
+          let maxHealth = 100;
+          let isAbandoned = false;
+
+          if (tile === ('abandoned_drone_factory' as TileType)) { type = 'drone_factory'; health = 20; isAbandoned = true; }
+          if (tile === ('abandoned_quarry' as TileType)) { type = 'quarry'; health = 20; isAbandoned = true; }
+          if (tile === ('abandoned_forge' as TileType)) { type = 'forge'; health = 20; isAbandoned = true; }
+
           buildingsRef.current.push({
             id: crypto.randomUUID(),
             x,
             y,
-            type: tile,
-            health: 100,
-            maxHealth: 100,
-            productionRate: tile === ('quarry' as TileType) ? 2 : 1, // Quarry: 2 stone/sec, Forge: 1 metal/sec
+            type: type,
+            health: health,
+            maxHealth: maxHealth,
+            productionRate: (type === 'quarry' && !isAbandoned) ? 2 : (type === 'forge' && !isAbandoned) ? 1 : 0, 
             lastProduced: 0,
-            isWreckage: false
+            isWreckage: isAbandoned // Use isWreckage flag to indicate it needs repair to function
           });
           
-          // Spawn initial drones for factory
-          if (tile === ('drone_factory' as TileType)) {
+          // Spawn initial drones for factory ONLY if not abandoned
+          if (type === 'drone_factory' && !isAbandoned) {
             for(let i=0; i<3; i++) {
               dronesRef.current.push({
                 id: crypto.randomUUID(),
@@ -1159,21 +1169,76 @@ export function useGameEngine(
     return false;
   };
 
-  const repairBuilding = (x: number, y: number, type: 'abandoned_quarry' | 'abandoned_forge' | 'abandoned_drone_factory') => {
-    const cost = type === 'abandoned_drone_factory' ? REPAIR_FACTORY_COST : REPAIR_BUILDING_COST;
-    
-    if (resources.stone >= cost.stone && resources.metal >= cost.metal) {
-      setResources((prev: Resources) => ({ stone: prev.stone - cost.stone, metal: prev.metal - cost.metal }));
-      
-      let newType: TileType = 'quarry' as TileType;
-      if (type === 'abandoned_forge') newType = 'forge' as TileType;
-      if (type === 'abandoned_drone_factory') newType = 'drone_factory' as TileType;
-      
-      // Instant repair for abandoned buildings (for now, or make it a job?)
-      // Let's make it instant to differentiate from construction
-      return newType;
+  const repairBuilding = (id: string, isTurret: boolean) => {
+    if (isTurret) {
+      const t = turretsRef.current.find(t => t.id === id);
+      if (t && t.health < t.maxHealth) {
+        const missing = t.maxHealth - t.health;
+        const cost = Math.ceil(missing * TURRET_STATS.repairCostPerHp);
+        if (resources.metal >= cost) {
+          setResources(prev => ({ ...prev, metal: prev.metal - cost }));
+          t.health = t.maxHealth;
+          toast.success("Turret Repaired");
+        } else {
+          toast.error("Not enough Metal");
+        }
+      }
+    } else {
+      const b = buildingsRef.current.find(b => b.id === id);
+      if (b && b.health < b.maxHealth) {
+        // Check if it's a factory repair (more expensive)
+        const isFactory = b.type === 'drone_factory';
+        const cost = isFactory ? REPAIR_FACTORY_COST : REPAIR_BUILDING_COST;
+        
+        if (resources.stone >= cost.stone && resources.metal >= cost.metal) {
+           setResources(prev => ({ ...prev, stone: prev.stone - cost.stone, metal: prev.metal - cost.metal }));
+           b.health = b.maxHealth;
+           
+           // If it was wreckage/abandoned, activate it
+           if (b.isWreckage) {
+             b.isWreckage = false;
+             if (b.type === 'quarry') b.productionRate = 2;
+             if (b.type === 'forge') b.productionRate = 1;
+             
+             // Spawn drones if factory
+             if (b.type === 'drone_factory') {
+                for(let i=0; i<2; i++) {
+                  dronesRef.current.push({
+                    id: crypto.randomUUID(),
+                    x: b.x,
+                    y: b.y,
+                    targetX: null,
+                    targetY: null,
+                    state: 'idle',
+                    jobId: null,
+                    speed: 3,
+                    type: 'worker'
+                  });
+                }
+                // Spawn 1 harvester
+                dronesRef.current.push({
+                  id: crypto.randomUUID(),
+                  x: b.x,
+                  y: b.y,
+                  targetX: null,
+                  targetY: null,
+                  state: 'idle',
+                  jobId: null,
+                  speed: 2.5,
+                  type: 'harvester',
+                  carryAmount: 0,
+                  resourceType: undefined
+                });
+             }
+             toast.success("Building Restored & Operational!");
+           } else {
+             toast.success("Building Repaired");
+           }
+        } else {
+           toast.error("Not enough Resources");
+        }
+      }
     }
-    return null;
   };
 
   const upgradeTurret = (x: number, y: number) => {
