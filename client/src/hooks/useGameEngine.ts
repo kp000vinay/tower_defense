@@ -1029,28 +1029,103 @@ export function useGameEngine(
                }
             }
           } else if (drone.type === 'repair') {
-            // Repair logic
-            const t = turretsRef.current.find(t => t.id === drone.jobId);
-            const b = buildingsRef.current.find(b => b.id === drone.jobId);
-            
-            const target = t || b;
-            
-            if (target && target.health < target.maxHealth) {
-               // Consume metal
-               if (resources.metal >= 0.1) { // Cost per tick
-                 setResources((res: Resources) => ({ ...res, metal: Math.max(0, res.metal - 0.1) }));
-                 target.health += 0.5; // Repair rate
-                 
-                 if (target.health >= target.maxHealth) {
-                   target.health = target.maxHealth;
-                   target.isWreckage = false; // Revived!
-                   drone.state = 'idle';
-                   drone.jobId = null;
+            // Auto-assign job if idle
+            if (drone.state === 'idle') {
+               let nearestTarget: any = null;
+               let minDistance = Infinity;
+               
+               // Check turrets
+               turretsRef.current.forEach(t => {
+                 if (t.health < t.maxHealth) {
+                   const dist = Math.sqrt(Math.pow(t.x - drone.x, 2) + Math.pow(t.y - drone.y, 2));
+                   if (dist < minDistance && dist < 15) { // 15 tile range for auto-repair
+                     minDistance = dist;
+                     nearestTarget = t;
+                   }
                  }
+               });
+               
+               // Check buildings (including abandoned)
+               buildingsRef.current.forEach(b => {
+                 if (b.health < b.maxHealth) {
+                   const dist = Math.sqrt(Math.pow(b.x - drone.x, 2) + Math.pow(b.y - drone.y, 2));
+                   if (dist < minDistance && dist < 15) {
+                     minDistance = dist;
+                     nearestTarget = b;
+                   }
+                 }
+               });
+               
+               if (nearestTarget) {
+                 drone.jobId = nearestTarget.id;
+                 drone.targetX = nearestTarget.x;
+                 drone.targetY = nearestTarget.y;
+                 drone.state = 'moving_to_job';
+               }
+            } else if (drone.state === 'moving_to_job') {
+               const dist = Math.sqrt(Math.pow(drone.targetX! - drone.x, 2) + Math.pow(drone.targetY! - drone.y, 2));
+               if (dist < 1.0) {
+                 drone.state = 'working';
+               }
+            } else if (drone.state === 'working') {
+                const t = turretsRef.current.find(t => t.id === drone.jobId);
+                const b = buildingsRef.current.find(b => b.id === drone.jobId);
+                
+                const target = t || b;
+                
+                if (target && target.health < target.maxHealth) {
+                   // Consume metal
+                   if (resources.metal >= 0.1) { // Cost per tick
+                     setResources((res: Resources) => ({ ...res, metal: Math.max(0, res.metal - 0.1) }));
+                     target.health += 0.5; // Repair rate
+                     
+                     if (target.health >= target.maxHealth) {
+                       target.health = target.maxHealth;
+                       
+                       // If it was wreckage, activate it!
+                       if (target.isWreckage) {
+                           target.isWreckage = false;
+                           // Logic to activate specific building types
+                           if ((target as any).type === 'quarry') (target as any).productionRate = 2;
+                           if ((target as any).type === 'forge') (target as any).productionRate = 1;
+                           
+                           if ((target as any).type === 'drone_factory') {
+                                // Spawn drones
+                                for(let i=0; i<2; i++) {
+                                  dronesRef.current.push({
+                                    id: crypto.randomUUID(),
+                                    x: target.x,
+                                    y: target.y,
+                                    targetX: null,
+                                    targetY: null,
+                                    state: 'idle',
+                                    jobId: null,
+                                    speed: 3,
+                                    type: 'worker'
+                                  });
+                                }
+                                dronesRef.current.push({
+                                  id: crypto.randomUUID(),
+                                  x: target.x,
+                                  y: target.y,
+                                  targetX: null,
+                                  targetY: null,
+                                  state: 'idle',
+                                  jobId: null,
+                                  speed: 2.5,
+                                  type: 'harvester',
+                                  carryAmount: 0,
+                                  resourceType: undefined
+                                });
+                           }
+                           toast.success("Abandoned Building Restored!");
+                       }
+                       
+                       drone.state = 'idle';
+                       drone.jobId = null;
+                     }
+                   }
                } else {
-                 // Out of metal, stop working
-                 drone.state = 'idle';
-                 drone.jobId = null;
                  toast.error("Out of Metal! Repairs paused.");
                }
             } else {
