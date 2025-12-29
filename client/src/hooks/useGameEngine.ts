@@ -545,10 +545,19 @@ export function useGameEngine(
         const dist = Math.sqrt(dx*dx + dy*dy);
         
         if (dist > 1.0) { // Move if not in melee range
-           // Calculate path if needed (every 30 ticks or if no path)
-           if (!enemy.path || enemy.path.length === 0 || frameRef.current % 30 === 0) {
+           // Calculate path if needed (staggered updates based on enemy ID hash)
+           // Use a simple hash of ID to stagger updates across frames
+           const idHash = enemy.id.charCodeAt(0) + enemy.id.charCodeAt(enemy.id.length - 1);
+           const shouldUpdatePath = !enemy.path || enemy.path.length === 0 || (frameRef.current + idHash) % 60 === 0;
+           
+           if (shouldUpdatePath) {
              const startNode = { x: Math.round(enemy.x), y: Math.round(enemy.y) };
              const endNode = { x: Math.round(targetX), y: Math.round(targetY) };
+             
+             // Only recalculate if target has moved significantly or we don't have a path
+             // For now, just check if we have a path to the current target
+             // Optimization: Check if endNode is same as last path node?
+             
              const newPath = findPath(grid, startNode, endNode, width, height);
              if (newPath && newPath.length > 0) {
                enemy.path = newPath;
@@ -889,7 +898,7 @@ export function useGameEngine(
                      });
                      // Spawn drones if factory/hub
                      if (tileType === ('drone_factory' as TileType)) {
-                        for(let i=0; i<3; i++) {
+                        for(let i=0; i<2; i++) {
                           dronesRef.current.push({
                             id: crypto.randomUUID(),
                             x: job.x,
@@ -902,6 +911,20 @@ export function useGameEngine(
                             type: 'worker'
                           });
                         }
+                        // Spawn 1 harvester
+                        dronesRef.current.push({
+                          id: crypto.randomUUID(),
+                          x: job.x,
+                          y: job.y,
+                          targetX: null,
+                          targetY: null,
+                          state: 'idle',
+                          jobId: null,
+                          speed: 2.5,
+                          type: 'harvester',
+                          carryAmount: 0,
+                          resourceType: undefined
+                        });
                      }
                      if (tileType === ('maintenance_hub' as TileType)) {
                         for(let i=0; i<2; i++) {
@@ -923,6 +946,77 @@ export function useGameEngine(
               }
             } else {
               drone.state = 'idle'; // Job gone?
+            }
+          } else if (drone.type === 'harvester') {
+            // Harvester Logic
+            if (drone.state === 'idle') {
+              // Find nearest resource
+              let minDist = Infinity;
+              let targetX = -1;
+              let targetY = -1;
+              let rType: 'stone' | 'metal' | undefined;
+
+              for(let y=0; y<height; y++) {
+                for(let x=0; x<width; x++) {
+                  const tile = grid[y][x];
+                  if (tile === ('resource_stone' as TileType) || tile === ('resource_metal' as TileType)) {
+                    const dist = Math.sqrt(Math.pow(x - drone.x, 2) + Math.pow(y - drone.y, 2));
+                    if (dist < minDist) {
+                      minDist = dist;
+                      targetX = x;
+                      targetY = y;
+                      rType = tile === ('resource_stone' as TileType) ? 'stone' : 'metal';
+                    }
+                  }
+                }
+              }
+
+              if (targetX !== -1) {
+                drone.targetX = targetX;
+                drone.targetY = targetY;
+                drone.resourceType = rType;
+                drone.state = 'moving_to_job';
+              }
+            } else if (drone.state === 'moving_to_job') {
+              // Move logic handled above
+              const dist = Math.sqrt(Math.pow(drone.targetX! - drone.x, 2) + Math.pow(drone.targetY! - drone.y, 2));
+              if (dist < 0.5) {
+                drone.state = 'working';
+              }
+            } else if (drone.state === 'working') {
+              drone.carryAmount = (drone.carryAmount || 0) + 0.5; // Harvest rate
+              if (drone.carryAmount >= 10) { // Max capacity
+                drone.state = 'returning';
+                // Find base or hero
+                // For now, return to hero
+                if (heroRef.current) {
+                  drone.targetX = heroRef.current.x;
+                  drone.targetY = heroRef.current.y;
+                } else {
+                   // Find base
+                   for(let y=0; y<height; y++) {
+                     for(let x=0; x<width; x++) {
+                       if (grid[y][x] === 'base') {
+                         drone.targetX = x;
+                         drone.targetY = y;
+                         break;
+                       }
+                     }
+                   }
+                }
+              }
+            } else if (drone.state === 'returning') {
+               const dist = Math.sqrt(Math.pow(drone.targetX! - drone.x, 2) + Math.pow(drone.targetY! - drone.y, 2));
+               if (dist < 1.0) {
+                 // Deposit
+                 if (drone.resourceType === 'stone') {
+                   setResources((res: Resources) => ({ ...res, stone: res.stone + (drone.carryAmount || 0) }));
+                 } else {
+                   setResources((res: Resources) => ({ ...res, metal: res.metal + (drone.carryAmount || 0) }));
+                 }
+                 drone.carryAmount = 0;
+                 drone.state = 'idle';
+               }
             }
           } else if (drone.type === 'repair') {
             // Repair logic

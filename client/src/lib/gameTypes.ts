@@ -36,8 +36,8 @@ export const TILE_COLORS: Record<TileType, string> = {
   extraction_point: 'bg-cyan-400 animate-pulse',
 };
 
-export const DEFAULT_WIDTH = 20;
-export const DEFAULT_HEIGHT = 12;
+export const DEFAULT_WIDTH = 40;
+export const DEFAULT_HEIGHT = 30;
 
 export type EnemyType = 'standard' | 'scout' | 'tank';
 
@@ -179,7 +179,9 @@ export interface Drone {
   state: 'idle' | 'moving_to_job' | 'working' | 'returning';
   jobId: string | null;
   speed: number;
-  type: 'worker' | 'repair';
+  type: 'worker' | 'repair' | 'harvester';
+  resourceType?: 'stone' | 'metal';
+  carryAmount?: number;
 }
 
 export interface ConstructionJob {
