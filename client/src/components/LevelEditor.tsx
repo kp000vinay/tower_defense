@@ -503,8 +503,12 @@ export default function LevelEditor() {
                   {isPreparationPhase && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Next Wave In</span>
-                        <span className="text-orange-400 font-mono animate-pulse">{preparationTime}s</span>
+                        <div className="flex flex-col items-center mb-2">
+                        <span className="text-slate-400 text-xs uppercase tracking-widest mb-1">Next Wave In</span>
+                        <span className="text-4xl font-bold text-orange-500 font-mono animate-pulse drop-shadow-[0_0_10px_rgba(249,115,22,0.5)]">
+                          {preparationTime}s
+                        </span>
+                      </div>
                       </div>
                       <div className="mt-2 pt-2 border-t border-slate-700">
                         <span className="text-slate-400 block mb-1">Incoming Threat:</span>
