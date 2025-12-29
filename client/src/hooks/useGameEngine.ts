@@ -31,6 +31,11 @@ export function useGameEngine(
   const [isExtracting, setIsExtracting] = useState(false);
   const [preparationTime, setPreparationTime] = useState(30); // 30 seconds prep time
   const [isPreparationPhase, setIsPreparationPhase] = useState(true);
+  
+  // Sync ref with state
+  useEffect(() => {
+    isPreparationPhaseRef.current = isPreparationPhase;
+  }, [isPreparationPhase]);
 
   const [currentWave, setCurrentWave] = useState<Wave>({
     count: 5,
@@ -85,6 +90,7 @@ export function useGameEngine(
   const spawnTimerRef = useRef<number>(0);
   const enemiesToSpawnRef = useRef<number>(0);
   const extractionTimerRef = useRef<number>(0);
+  const isPreparationPhaseRef = useRef<boolean>(true);
   
   // Initialize path when pathPreview changes
   useEffect(() => {
@@ -431,7 +437,7 @@ export function useGameEngine(
       // Update Game Logic
       
       // 1. Spawning
-      if (!isPreparationPhase) {
+      if (!isPreparationPhaseRef.current) {
         if (enemiesToSpawnRef.current > 0) {
           spawnTimerRef.current += deltaTime;
           if (spawnTimerRef.current >= currentWave.interval) {
