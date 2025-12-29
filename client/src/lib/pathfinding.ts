@@ -74,10 +74,21 @@ export const findPath = (
         continue;
       }
 
-      // Check if walkable (must be 'path', 'spawn', or 'base')
-      // 'empty' and 'wall' are obstacles for enemies
+      // Check if walkable
       const tileType = grid[neighbor.y][neighbor.x];
-      if (tileType !== 'path' && tileType !== 'spawn' && tileType !== 'base') {
+      // Enemies can walk on: empty, path, base, spawn, rubble, resources, extraction_point
+      // Obstacles: wall, turret, sniper, quarry, forge, drone_factory, maintenance_hub, wreckage
+      const isWalkable = 
+        tileType === 'empty' || 
+        tileType === 'path' || 
+        tileType === 'base' || 
+        tileType === 'spawn' || 
+        tileType === 'rubble' || 
+        tileType === ('resource_stone' as TileType) || 
+        tileType === ('resource_metal' as TileType) ||
+        tileType === ('extraction_point' as TileType);
+
+      if (!isWalkable) {
         continue;
       }
 

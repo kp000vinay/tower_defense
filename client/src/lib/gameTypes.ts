@@ -11,7 +11,7 @@ export interface LevelData {
   name: string;
   width: number;
   height: number;
-  tiles: Tile[][];
+  tiles: TileType[][];
 }
 
 export const TILE_COLORS: Record<TileType, string> = {
@@ -133,19 +133,24 @@ export interface Particle {
   size: number;
 }
 
-export const TURRET_COST = { stone: 0, metal: 50 };
-export const SNIPER_COST = { stone: 0, metal: 120 };
-export const QUARRY_COST = { stone: 50, metal: 0 };
-export const FORGE_COST = { stone: 100, metal: 0 };
-export const MAINTENANCE_HUB_COST = { stone: 100, metal: 100 };
-export const WALL_COST = { stone: 10, metal: 0 };
-export const PATH_COST = { stone: 5, metal: 0 };
-export const REPAIR_BUILDING_COST = { stone: 25, metal: 10 };
-export const REPAIR_FACTORY_COST = { stone: 50, metal: 50 };
+export interface Cost {
+  stone: number;
+  metal: number;
+}
 
-export const UPGRADE_COST = { stone: 0, metal: 75 };
-export const SNIPER_UPGRADE_COST = { stone: 0, metal: 150 };
-export const KILL_REWARD = 10; // Still keep some kill reward? Or remove? Let's keep for now as 'bounty'
+export const TURRET_COST: Cost = { stone: 0, metal: 50 };
+export const SNIPER_COST: Cost = { stone: 0, metal: 120 };
+export const QUARRY_COST: Cost = { stone: 50, metal: 0 };
+export const FORGE_COST: Cost = { stone: 100, metal: 0 };
+export const MAINTENANCE_HUB_COST: Cost = { stone: 100, metal: 100 };
+export const WALL_COST: Cost = { stone: 10, metal: 0 };
+export const PATH_COST: Cost = { stone: 5, metal: 0 };
+export const REPAIR_BUILDING_COST: Cost = { stone: 25, metal: 10 };
+export const REPAIR_FACTORY_COST: Cost = { stone: 50, metal: 50 };
+
+export const UPGRADE_COST: Cost = { stone: 0, metal: 75 };
+export const SNIPER_UPGRADE_COST: Cost = { stone: 0, metal: 150 };
+export const KILL_REWARD = 10; 
 
 export interface DamageNumber {
   id: string;
@@ -181,7 +186,7 @@ export interface ConstructionJob {
   id: string;
   x: number;
   y: number;
-  type: 'build_turret' | 'build_sniper' | 'build_quarry' | 'build_forge' | 'build_maintenance_hub';
+  type: 'build_turret' | 'build_sniper' | 'build_quarry' | 'build_forge' | 'build_maintenance_hub' | 'build_drone_factory';
   progress: number; // 0 to 100
   totalWork: number; // Time/ticks needed
   assignedDroneId: string | null;
