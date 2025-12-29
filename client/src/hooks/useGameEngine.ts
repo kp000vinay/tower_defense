@@ -29,7 +29,9 @@ export function useGameEngine(
   const [hero, setHero] = useState<Hero | null>(null);
   const [extractionProgress, setExtractionProgress] = useState(0); // 0 to 100
   const [isExtracting, setIsExtracting] = useState(false);
-  
+  const [preparationTime, setPreparationTime] = useState(30); // 30 seconds prep time
+  const [isPreparationPhase, setIsPreparationPhase] = useState(true);
+
   const [currentWave, setCurrentWave] = useState<Wave>({
     count: 5,
     interval: 1500,
@@ -41,6 +43,25 @@ export function useGameEngine(
     const saved = localStorage.getItem('std-highscore');
     if (saved) setHighScore(parseInt(saved));
   }, []);
+
+  // Preparation Phase Timer
+  useEffect(() => {
+    if (!isPreparationPhase) return;
+    
+    const timer = setInterval(() => {
+      setPreparationTime(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setIsPreparationPhase(false);
+          startWave(1);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isPreparationPhase]);
   
   // Refs for mutable state in game loop
   const enemiesRef = useRef<Enemy[]>([]);
@@ -306,7 +327,7 @@ export function useGameEngine(
     setDrones([...dronesRef.current]);
 
     // Start first wave
-    startWave(1);
+    // startWave(1); // Handled by preparation timer
     
     // Start game loop
     lastTickRef.current = performance.now();
@@ -379,16 +400,23 @@ export function useGameEngine(
       // Update Game Logic
       
       // 1. Spawning
-      if (enemiesToSpawnRef.current > 0) {
-        spawnTimerRef.current += deltaTime;
-        if (spawnTimerRef.current >= currentWave.interval) {
-          spawnEnemy();
-          enemiesToSpawnRef.current--;
-          spawnTimerRef.current = 0;
+      if (isPreparationPhase) {
+        // Decrease prep time
+        // We need to use a ref for prep time to avoid closure staleness if we were using state directly in loop
+        // But since we are in a loop driven by requestAnimationFrame, we should rely on state updates being reflected in next render
+        // However, updating state every tick is bad. Let's use a ref for the timer accumulator.
+      } else {
+        if (enemiesToSpawnRef.current > 0) {
+          spawnTimerRef.current += deltaTime;
+          if (spawnTimerRef.current >= currentWave.interval) {
+            spawnEnemy();
+            enemiesToSpawnRef.current--;
+            spawnTimerRef.current = 0;
+          }
+        } else if (enemiesRef.current.length === 0 && wave < 100) { // Simple wave check
+           // Wave complete, start next after delay? For now immediate
+           startWave(wave + 1);
         }
-      } else if (enemiesRef.current.length === 0 && wave < 100) { // Simple wave check
-         // Wave complete, start next after delay? For now immediate
-         startWave(wave + 1);
       }
 
       // 2. Hero Logic
@@ -624,13 +652,13 @@ export function useGameEngine(
       });
 
       // 4. Turret Logic
+      const newProjectiles: Projectile[] = [];
       turretsRef.current.forEach(turret => {
         if (turret.health <= 0) return;
         
         if (time - turret.lastFired >= turret.cooldown) {
           // Find target
           let target = null;
-          let minHealth = Infinity; // Target weakest? Or closest? Let's go closest.
           let minDist = Infinity;
 
           for (const enemy of enemiesRef.current) {
@@ -642,7 +670,7 @@ export function useGameEngine(
           }
 
           if (target) {
-            projectilesRef.current.push({
+            newProjectiles.push({
               id: crypto.randomUUID(),
               x: turret.x,
               y: turret.y,
@@ -655,67 +683,70 @@ export function useGameEngine(
           }
         }
       });
+      
+      // Add new projectiles to ref
+      projectilesRef.current = [...projectilesRef.current, ...newProjectiles];
 
       // 5. Projectile Logic
-      setProjectiles(prev => {
-        const next = [];
-        for (const p of projectilesRef.current) {
-          const target = enemiesRef.current.find(e => e.id === p.targetId);
-          // Or hero target? Enemies don't shoot projectiles yet, they melee.
+      const activeProjectiles: Projectile[] = [];
+      for (const p of projectilesRef.current) {
+        const target = enemiesRef.current.find(e => e.id === p.targetId);
+        
+        if (target) {
+          const dx = target.x - p.x;
+          const dy = target.y - p.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
           
-          if (target) {
-            const dx = target.x - p.x;
-            const dy = target.y - p.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < 0.5) {
+            // Hit!
+            target.health -= p.damage;
+            damageNumbersRef.current.push({
+              id: crypto.randomUUID(),
+              x: target.x,
+              y: target.y,
+              value: p.damage,
+              life: 1.0,
+              color: '#fbbf24' // Gold for damage
+            });
             
-            if (dist < 0.5) {
-              // Hit!
-              target.health -= p.damage;
-              damageNumbersRef.current.push({
+            // Particle effect
+            for(let i=0; i<5; i++) {
+              particlesRef.current.push({
                 id: crypto.randomUUID(),
                 x: target.x,
                 y: target.y,
-                value: p.damage,
+                vx: (Math.random() - 0.5) * 10,
+                vy: (Math.random() - 0.5) * 10,
                 life: 1.0,
-                color: '#fbbf24' // Gold for damage
+                maxLife: 1.0,
+                color: '#fbbf24',
+                size: Math.random() * 3 + 1
               });
-              
-              // Particle effect
-              for(let i=0; i<5; i++) {
-                particlesRef.current.push({
-                  id: crypto.randomUUID(),
-                  x: target.x,
-                  y: target.y,
-                  vx: (Math.random() - 0.5) * 10,
-                  vy: (Math.random() - 0.5) * 10,
-                  life: 1.0,
-                  maxLife: 1.0,
-                  color: '#fbbf24',
-                  size: Math.random() * 3 + 1
-                });
-              }
-
-              if (target.health <= 0) {
-                // Enemy death handled in cleanup
-                setResources((res: Resources) => ({ ...res, metal: res.metal + target.reward }));
-                setHighScore(s => {
-                  const newScore = s + KILL_REWARD;
-                  localStorage.setItem('std-highscore', newScore.toString());
-                  return newScore;
-                });
-              }
-            } else {
-              // Move projectile
-              const move = p.speed * TICK_MS / 1000;
-              p.x += (dx / dist) * move;
-              p.y += (dy / dist) * move;
-              next.push(p);
             }
+
+            if (target.health <= 0) {
+              // Enemy death handled in cleanup
+              setResources((res: Resources) => ({ ...res, metal: res.metal + target.reward }));
+              setHighScore(s => {
+                const newScore = s + KILL_REWARD;
+                localStorage.setItem('std-highscore', newScore.toString());
+                return newScore;
+              });
+            }
+          } else {
+            // Move projectile
+            const move = p.speed * TICK_MS / 1000;
+            p.x += (dx / dist) * move;
+            p.y += (dy / dist) * move;
+            activeProjectiles.push(p);
           }
+        } else {
+          // Target lost/dead, remove projectile
         }
-        projectilesRef.current = next;
-        return next;
-      });
+      }
+      
+      projectilesRef.current = activeProjectiles;
+      setProjectiles([...activeProjectiles]);
 
       // Cleanup dead enemies
       enemiesRef.current = enemiesRef.current.filter(e => e.health > 0);
@@ -1117,6 +1148,8 @@ export function useGameEngine(
     jobs,
     hero,
     extractionProgress,
+    preparationTime,
+    isPreparationPhase,
     isExtracting,
     startGame,
     stopGame,

@@ -91,6 +91,8 @@ export default function LevelEditor() {
     hero,
     extractionProgress,
     isExtracting,
+    preparationTime,
+    isPreparationPhase,
     startGame, 
     stopGame,
     buildTurret,
@@ -494,8 +496,14 @@ export default function LevelEditor() {
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Wave</span>
-                    <span className="text-white font-mono">{wave}</span>
+                    <span className="text-white font-mono">{isPreparationPhase ? 'PREPARING' : wave}</span>
                   </div>
+                  {isPreparationPhase && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Next Wave In</span>
+                      <span className="text-orange-400 font-mono animate-pulse">{preparationTime}s</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-slate-400">Enemies</span>
                     <span className="text-red-400 font-mono">{enemies.length}</span>
