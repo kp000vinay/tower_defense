@@ -91,6 +91,9 @@ export default function LevelEditor() {
     hero,
     extractionProgress,
     isExtracting,
+    preparationTime,
+    isPreparationPhase,
+    currentWave,
     startGame, 
     stopGame,
     buildTurret,
@@ -494,8 +497,29 @@ export default function LevelEditor() {
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Wave</span>
-                    <span className="text-white font-mono">{wave}</span>
+                    <span className="text-white font-mono">{isPreparationPhase ? 'PREPARING' : wave}</span>
                   </div>
+                  {isPreparationPhase && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Next Wave In</span>
+                        <span className="text-orange-400 font-mono animate-pulse">{preparationTime}s</span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-slate-700">
+                        <span className="text-slate-400 block mb-1">Incoming Threat:</span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-300">Count</span>
+                            <span className="text-red-400 font-mono">{currentWave.count}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-300">Types</span>
+                            <span className="text-red-400 font-mono capitalize">{currentWave.types.join(', ')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-slate-400">Enemies</span>
                     <span className="text-red-400 font-mono">{enemies.length}</span>
