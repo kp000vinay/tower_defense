@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { TileType, Enemy, GameState, Wave, TurretEntity, BuildingEntity, Projectile, Particle, DamageNumber, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, KILL_REWARD, ENEMY_STATS, EnemyType, TURRET_STATS, Resources, QUARRY_COST, FORGE_COST, REPAIR_BUILDING_COST, FOG_RADIUS, REPAIR_FACTORY_COST, Drone, ConstructionJob, MAINTENANCE_HUB_COST, Hero, HERO_STATS, EXTRACTION_TIME, Cost } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
-import { toast } from 'sonner';
+import { gameToast } from '@/lib/toastUtils';
 
 const TICK_RATE = 60; // FPS
 const TICK_MS = 1000 / TICK_RATE;
@@ -634,7 +634,7 @@ export function useGameEngine(
                });
                if (heroRef.current.health <= 0) {
                  setGameState('gameover');
-                 toast.error("Commander Down! Mission Failed.");
+                 gameToast.error("Commander Down! Mission Failed.");
                }
              } else if (targetType === 'building') {
                const b = buildingsRef.current.find(b => b.id === targetId);
@@ -1126,7 +1126,7 @@ export function useGameEngine(
                                   resourceType: undefined
                                 });
                            }
-                           toast.success("Abandoned Building Restored!");
+                           gameToast.success("Abandoned Building Restored!");
                        }
                        
                        drone.state = 'idle';
@@ -1134,7 +1134,7 @@ export function useGameEngine(
                      }
                    }
                } else {
-                 toast.error("Out of Metal! Repairs paused.");
+                 gameToast.error("Out of Metal! Repairs paused.", "repair_metal_error");
                }
             } else {
               // Done or gone
@@ -1165,7 +1165,7 @@ export function useGameEngine(
            const dist = Math.sqrt(Math.pow(heroRef.current.x - endNode.x, 2) + Math.pow(heroRef.current.y - endNode.y, 2));
            if (dist < 1.5) {
               setIsExtracting(true);
-              toast.success("Extraction Initiated! Hold position!");
+              gameToast.success("Extraction Initiated! Hold position!");
            }
         }
       } else {
@@ -1175,7 +1175,7 @@ export function useGameEngine(
         
         if (extractionTimerRef.current >= EXTRACTION_TIME) {
           setGameState('victory');
-          toast.success("Extraction Complete! Mission Accomplished!");
+          gameToast.success("Extraction Complete! Mission Accomplished!");
         }
         
         // Check if connection broken?
@@ -1257,9 +1257,9 @@ export function useGameEngine(
         if (resources.metal >= cost) {
           setResources(prev => ({ ...prev, metal: prev.metal - cost }));
           t.health = t.maxHealth;
-          toast.success("Turret Repaired");
+          gameToast.success("Turret Repaired");
         } else {
-          toast.error("Not enough Metal");
+          gameToast.error("Not enough Metal", "repair_metal_error");
         }
       }
     } else {
@@ -1309,12 +1309,12 @@ export function useGameEngine(
                   resourceType: undefined
                 });
              }
-             toast.success("Building Restored & Operational!");
+             gameToast.success("Building Restored & Operational!");
            } else {
-             toast.success("Building Repaired");
+             gameToast.success("Building Repaired");
            }
         } else {
-           toast.error("Not enough Resources");
+           gameToast.error("Not enough Resources", "resource_error");
         }
       }
     }
