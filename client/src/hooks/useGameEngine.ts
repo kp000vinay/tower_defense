@@ -367,6 +367,14 @@ export function useGameEngine(
     spawnTimerRef.current = 0;
   };
 
+  const skipPreparation = () => {
+    if (isPreparationPhase) {
+      setPreparationTime(0);
+      setIsPreparationPhase(false);
+      startWave(1);
+    }
+  };
+
   const spawnEnemy = () => {
     // Spawn from random edge of map (Global Spawning)
     let x, y;
@@ -1143,26 +1151,22 @@ export function useGameEngine(
       setDrones([...dronesRef.current]);
       setJobs([...jobsRef.current]);
 
-      // 8. Win Condition (Connect & Hold)
-      // Check if path connects Base to Extraction Point
+      // 8. Win Condition (Hero at Extraction Point)
       if (!isExtracting) {
-        // Find Base and Extraction
-        let startNode = null;
+        // Find Extraction Point
         let endNode = null;
         for(let y=0; y<height; y++) {
           for(let x=0; x<width; x++) {
-            if (grid[y][x] === 'base') startNode = {x, y};
             if (grid[y][x] === ('extraction_point' as TileType)) endNode = {x, y};
           }
         }
         
-        if (startNode && endNode) {
-          // Check path
-          const path = findPath(grid, startNode, endNode, width, height);
-          if (path) {
-            setIsExtracting(true);
-            toast.success("Connection Established! Hold the line for extraction!");
-          }
+        if (endNode && heroRef.current) {
+           const dist = Math.sqrt(Math.pow(heroRef.current.x - endNode.x, 2) + Math.pow(heroRef.current.y - endNode.y, 2));
+           if (dist < 1.5) {
+              setIsExtracting(true);
+              toast.success("Extraction Initiated! Hold position!");
+           }
         }
       } else {
         // Extraction in progress
@@ -1386,6 +1390,7 @@ export function useGameEngine(
     isPreparationPhase,
     isExtracting,
     currentWave,
+    skipPreparation,
     startGame,
     stopGame,
     buildTurret,

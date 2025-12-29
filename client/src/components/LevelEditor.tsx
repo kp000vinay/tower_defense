@@ -94,6 +94,7 @@ export default function LevelEditor() {
     preparationTime,
     isPreparationPhase,
     currentWave,
+    skipPreparation,
     startGame, 
     stopGame,
     buildTurret,
@@ -517,6 +518,16 @@ export default function LevelEditor() {
                             <span className="text-red-400 font-mono capitalize">{currentWave.types.join(', ')}</span>
                           </div>
                         </div>
+                      </div>
+                      <div className="mt-3">
+                        <Button 
+                          size="sm" 
+                          variant="destructive" 
+                          className="w-full text-xs"
+                          onClick={skipPreparation}
+                        >
+                          Start Wave Now
+                        </Button>
                       </div>
                     </>
                   )}
