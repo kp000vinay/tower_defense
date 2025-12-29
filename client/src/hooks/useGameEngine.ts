@@ -53,7 +53,6 @@ export function useGameEngine(
         if (prev <= 1) {
           clearInterval(timer);
           setIsPreparationPhase(false);
-          startWave(1);
           return 0;
         }
         return prev - 1;
@@ -61,6 +60,13 @@ export function useGameEngine(
     }, 1000);
 
     return () => clearInterval(timer);
+  }, [isPreparationPhase]);
+
+  // Trigger first wave when preparation ends
+  useEffect(() => {
+    if (!isPreparationPhase && wave === 1 && enemies.length === 0 && enemiesToSpawnRef.current === 0) {
+       startWave(1);
+    }
   }, [isPreparationPhase]);
   
   // Refs for mutable state in game loop
@@ -339,6 +345,11 @@ export function useGameEngine(
     // Start first wave
     // startWave(1); // Handled by preparation timer
     
+    // Reset extraction state
+    setExtractionProgress(0);
+    setIsExtracting(false);
+    extractionTimerRef.current = 0;
+    
     // Start game loop
     lastTickRef.current = performance.now();
     frameRef.current = requestAnimationFrame(gameLoop);
@@ -371,6 +382,8 @@ export function useGameEngine(
     if (isPreparationPhase) {
       setPreparationTime(0);
       setIsPreparationPhase(false);
+      // Trigger wave start via effect or direct call, but ensure state is consistent
+      // Setting isPreparationPhase(false) will enable the game loop spawning logic
       startWave(1);
     }
   };
@@ -418,12 +431,7 @@ export function useGameEngine(
       // Update Game Logic
       
       // 1. Spawning
-      if (isPreparationPhase) {
-        // Decrease prep time
-        // We need to use a ref for prep time to avoid closure staleness if we were using state directly in loop
-        // But since we are in a loop driven by requestAnimationFrame, we should rely on state updates being reflected in next render
-        // However, updating state every tick is bad. Let's use a ref for the timer accumulator.
-      } else {
+      if (!isPreparationPhase) {
         if (enemiesToSpawnRef.current > 0) {
           spawnTimerRef.current += deltaTime;
           if (spawnTimerRef.current >= currentWave.interval) {
