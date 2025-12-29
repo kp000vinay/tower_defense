@@ -1151,6 +1151,7 @@ export function useGameEngine(
     preparationTime,
     isPreparationPhase,
     isExtracting,
+    currentWave,
     startGame,
     stopGame,
     buildTurret,
