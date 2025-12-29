@@ -21,7 +21,7 @@ export function useGameEngine(
   const [damageNumbers, setDamageNumbers] = useState<DamageNumber[]>([]);
   const [wave, setWave] = useState(1);
   const [lives, setLives] = useState(1);
-  const [resources, setResources] = useState<Resources>({ stone: 50, metal: 20 }); 
+  const [resources, setResources] = useState<Resources>({ stone: 150, metal: 100 }); 
   const [highScore, setHighScore] = useState(0);
   const [visibleTiles, setVisibleTiles] = useState<boolean[][]>([]);
   const [drones, setDrones] = useState<Drone[]>([]);
