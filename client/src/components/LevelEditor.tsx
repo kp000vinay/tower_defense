@@ -6,7 +6,7 @@ import { Enemy } from '@/lib/gameTypes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { toast } from 'sonner';
+import { gameToast } from '@/lib/toastUtils';
 import { Save, Trash2, Play, Grid3X3, Download, Upload, Wrench, Pickaxe, Hammer, Mountain, Gem, EyeOff, Bot, HeartPulse, ArrowDownCircle, User, Flag, Radio } from 'lucide-react';
 
 export default function LevelEditor() {
@@ -41,31 +41,31 @@ export default function LevelEditor() {
       switch (e.key.toLowerCase()) {
         case 's':
           setSelectedTool('sell');
-          toast.info('Tool: Sell');
+          gameToast.info('Tool: Sell', 'tool_select');
           break;
         case 'r':
           setSelectedTool('repair');
-          toast.info('Tool: Repair');
+          gameToast.info('Tool: Repair', 'tool_select');
           break;
         case 't':
           setSelectedTool('turret');
-          toast.info('Tool: Standard Turret');
+          gameToast.info('Tool: Standard Turret', 'tool_select');
           break;
         case 'y': // 'S' is taken, so use 'Y' for Sniper (or maybe 'P' for Precision?)
           setSelectedTool('sniper');
-          toast.info('Tool: Sniper Turret');
+          gameToast.info('Tool: Sniper Turret', 'tool_select');
           break;
         case 'q':
           setSelectedTool('quarry');
-          toast.info('Tool: Quarry');
+          gameToast.info('Tool: Quarry', 'tool_select');
           break;
         case 'f':
           setSelectedTool('forge');
-          toast.info('Tool: Forge');
+          gameToast.info('Tool: Forge', 'tool_select');
           break;
         case 'm':
           setSelectedTool('maintenance_hub');
-          toast.info('Tool: Maintenance Hub');
+          gameToast.info('Tool: Maintenance Hub', 'tool_select');
           break;
         case 'escape':
           setSelectedTool('empty'); // Or whatever "no tool" state is appropriate
@@ -141,16 +141,16 @@ export default function LevelEditor() {
             const newGrid = [...grid];
             newGrid[y][x] = originalTile;
             setGrid(newGrid);
-            toast.success(`Turret recycled! +${refundMetal} Metal, +${refundStone} Stone`);
+            gameToast.success(`Turret recycled! +${refundMetal} Metal, +${refundStone} Stone`);
           }
         } else if (grid[y][x] === 'rubble') {
           if (clearRubble(x, y)) {
             const newGrid = [...grid];
             newGrid[y][x] = 'empty'; // Or whatever was there before? For now, empty.
             setGrid(newGrid);
-            toast.success('Rubble cleared!');
+            gameToast.success('Rubble cleared!');
           } else {
-            toast.error('Insufficient resources to clear rubble!');
+            gameToast.error('Insufficient resources to clear rubble!', 'resource_error');
           }
         }
         return;
@@ -164,10 +164,10 @@ export default function LevelEditor() {
             const newGrid = [...grid];
             newGrid[y][x] = newType;
             setGrid(newGrid);
-            toast.success('Facility restored and operational!');
+            gameToast.success('Facility restored and operational!');
           } else {
             const cost = grid[y][x] === 'abandoned_drone_factory' ? REPAIR_FACTORY_COST : REPAIR_BUILDING_COST;
-            toast.error(`Need ${cost.stone} Stone, ${cost.metal} Metal to repair!`);
+            gameToast.error(`Need ${cost.stone} Stone, ${cost.metal} Metal to repair!`, 'resource_error');
           }
           return;
         }
@@ -175,12 +175,12 @@ export default function LevelEditor() {
         const turret = getTurretAt(x, y);
         if (turret) {
           if (turret.health >= turret.maxHealth) {
-            toast.info('Turret is already fully operational.');
+            gameToast.info('Turret is already fully operational.', 'turret_full_health');
           } else {
             if (repairTurret(x, y)) {
-              toast.success('Turret repaired!');
+              gameToast.success('Turret repaired!');
             } else {
-              toast.error('Insufficient resources for repair!');
+              gameToast.error('Insufficient resources for repair!', 'resource_error');
             }
           }
         }
@@ -198,19 +198,19 @@ export default function LevelEditor() {
         if (grid[y][x] === 'empty' || grid[y][x] === 'wall' || grid[y][x] === 'rubble') {
           if (buildTurret(x, y, selectedTool === 'sniper' ? 'sniper' : 'standard')) {
             // Don't update grid immediately - wait for drone
-            toast.success(`Construction order placed! Waiting for drone...`);
+            gameToast.success(`Construction order placed! Waiting for drone...`);
           } else {
-            toast.error('Insufficient resources!');
+            gameToast.error('Insufficient resources!', 'resource_error');
           }
         } else if (grid[y][x] === 'turret' || grid[y][x] === 'sniper') {
           // Upgrade logic
           if (upgradeTurret(x, y)) {
-            toast.success('Turret upgraded!');
+            gameToast.success('Turret upgraded!');
           } else {
             const turret = getTurretAt(x, y);
             if (turret) {
               const cost = turret.type === 'sniper' ? SNIPER_UPGRADE_COST : UPGRADE_COST;
-              toast.info(`Level ${turret.level} ${turret.type === 'sniper' ? 'Sniper' : 'Turret'} (Upgrade: ${cost.metal} Metal)`);
+              gameToast.info(`Level ${turret.level} ${turret.type === 'sniper' ? 'Sniper' : 'Turret'} (Upgrade: ${cost.metal} Metal)`, 'upgrade_info');
             }
           }
         }
@@ -223,12 +223,12 @@ export default function LevelEditor() {
         if (!requiredTile || grid[y][x] === requiredTile || (selectedTool === 'maintenance_hub' && (grid[y][x] === 'empty' || grid[y][x] === 'rubble'))) {
            if (buildBuilding(x, y, selectedTool)) {
              // Don't update grid immediately - wait for drone
-             toast.success(`Construction order placed! Waiting for drone...`);
+             gameToast.success(`Construction order placed! Waiting for drone...`);
            } else {
-             toast.error('Insufficient resources!');
+             gameToast.error('Insufficient resources!', 'resource_error');
            }
         } else {
-          toast.error(`Invalid placement for ${selectedTool}!`);
+          gameToast.error(`Invalid placement for ${selectedTool}!`, 'invalid_placement');
         }
       }
 
@@ -297,7 +297,7 @@ export default function LevelEditor() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('Level saved!');
+    gameToast.success('Level saved!');
   };
 
   const loadLevel = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,9 +312,9 @@ export default function LevelEditor() {
         setWidth(data.width);
         setHeight(data.height);
         setGrid(data.tiles);
-        toast.success('Level loaded!');
+        gameToast.success('Level loaded!');
       } catch (err) {
-        toast.error('Failed to load level file');
+        gameToast.error('Failed to load level file');
       }
     };
     reader.readAsText(file);
