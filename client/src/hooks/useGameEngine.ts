@@ -206,6 +206,11 @@ export function useGameEngine(
       }
     }
     
+    // Reveal around dynamic turrets (not in grid yet)
+    turretsRef.current.forEach(t => {
+       reveal(Math.round(t.x), Math.round(t.y), FOG_RADIUS - 1);
+    });
+    
     setVisibleTiles(newVisible);
   }, [grid, width, height]);
 
@@ -932,6 +937,8 @@ export function useGameEngine(
                         maxHealth: tileType === 'sniper' ? TURRET_STATS.sniperHealth : TURRET_STATS.baseHealth,
                         type: tileType === 'sniper' ? 'sniper' : 'standard',
                      });
+                     // Force visibility update to reveal fog around new turret
+                     updateVisibility();
                    } else {
                      buildingsRef.current.push({
                         id: crypto.randomUUID(),
