@@ -732,6 +732,20 @@ export default function LevelEditor() {
             {/* Game Entities Layer (only visible if not fog) */}
             {gameState === 'playing' && (
               <>
+                {/* Range Visualization */}
+                {selectedTurret && (
+                  <div
+                    className="absolute rounded-full border-2 border-blue-400/30 bg-blue-400/10 pointer-events-none z-10"
+                    style={{
+                      left: (selectedTurret.x + 0.5) * 32,
+                      top: (selectedTurret.y + 0.5) * 32,
+                      width: (getTurretAt(selectedTurret.x, selectedTurret.y)?.range || 3.5) * 2 * 32,
+                      height: (getTurretAt(selectedTurret.x, selectedTurret.y)?.range || 3.5) * 2 * 32,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                  />
+                )}
+
                 {/* Hero */}
                 {hero && (
                   <div 
