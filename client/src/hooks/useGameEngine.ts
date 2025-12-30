@@ -1451,6 +1451,8 @@ export function useGameEngine(
     sellTurret,
     repairTurret,
     clearRubble,
-    highScore
+    highScore,
+    turrets: turretsRef.current,
+    buildings: buildingsRef.current
   };
 }

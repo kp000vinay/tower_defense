@@ -97,6 +97,8 @@ export default function LevelEditor() {
     skipPreparation,
     startGame, 
     stopGame,
+    turrets,
+    buildings,
     buildTurret,
     buildBuilding,
     repairBuilding,
@@ -709,15 +711,55 @@ export default function LevelEditor() {
                         {tile === 'abandoned_forge' && <Hammer className="w-5 h-5 text-cyan-700 m-auto mt-1" />}
                         {tile === 'abandoned_drone_factory' && <Bot className="w-5 h-5 text-indigo-700 m-auto mt-1" />}
 
-                        {/* Active Buildings */}
-                        {tile === 'quarry' && <Pickaxe className="w-5 h-5 text-stone-200 m-auto mt-1 animate-bounce" style={{ animationDuration: '2s' }} />}
-                        {tile === 'forge' && <Hammer className="w-5 h-5 text-cyan-200 m-auto mt-1 animate-bounce" style={{ animationDuration: '2s' }} />}
-                        {tile === 'drone_factory' && <Bot className="w-5 h-5 text-indigo-300 m-auto mt-1" />}
-                        {tile === 'maintenance_hub' && <HeartPulse className="w-5 h-5 text-emerald-400 m-auto mt-1" />}
+                        {/* Active Buildings & Turrets with Health Bars */}
+                        {(() => {
+                          const building = buildings.find(b => b.x === x && b.y === y);
+                          const turret = turrets.find(t => t.x === x && t.y === y);
+                          const entity = building || turret;
+                          
+                          if (!entity) return null;
 
-                        {/* Turrets */}
-                        {tile === 'turret' && <div className="w-4 h-4 bg-blue-400 rounded-full m-auto mt-2 shadow-[0_0_10px_rgba(96,165,250,0.5)]" />}
-                        {tile === 'sniper' && <div className="w-4 h-4 bg-purple-400 rounded-full m-auto mt-2 shadow-[0_0_10px_rgba(192,132,252,0.5)]" />}
+                          const healthPercent = entity.health / entity.maxHealth;
+                          const isDamaged = healthPercent < 1;
+                          const isCritical = healthPercent < 0.25;
+                          const isHeavyDamage = healthPercent < 0.5;
+
+                          return (
+                            <div className="relative w-full h-full flex items-center justify-center">
+                              {/* Health Bar (only show if damaged) */}
+                              {isDamaged && (
+                                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-6 h-1 bg-black/50 rounded-full overflow-hidden z-10">
+                                  <div 
+                                    className={`h-full transition-all duration-200 ${
+                                      isCritical ? 'bg-red-600' : 
+                                      isHeavyDamage ? 'bg-orange-500' : 'bg-green-500'
+                                    }`}
+                                    style={{ width: `${healthPercent * 100}%` }} 
+                                  />
+                                </div>
+                              )}
+
+                              {/* Visual Damage Effects */}
+                              <div className={`relative ${isCritical ? 'animate-pulse' : ''}`}>
+                                {tile === 'quarry' && <Pickaxe className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-stone-400' : 'text-stone-200 animate-bounce'}`} style={{ animationDuration: '2s' }} />}
+                                {tile === 'forge' && <Hammer className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-cyan-900' : 'text-cyan-200 animate-bounce'}`} style={{ animationDuration: '2s' }} />}
+                                {tile === 'drone_factory' && <Bot className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-indigo-900' : 'text-indigo-300'}`} />}
+                                {tile === 'maintenance_hub' && <HeartPulse className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-emerald-900' : 'text-emerald-400'}`} />}
+                                
+                                {tile === 'turret' && <div className={`w-4 h-4 rounded-full m-auto mt-2 shadow-[0_0_10px_rgba(96,165,250,0.5)] ${isHeavyDamage ? 'bg-blue-900' : 'bg-blue-400'}`} />}
+                                {tile === 'sniper' && <div className={`w-4 h-4 rounded-full m-auto mt-2 shadow-[0_0_10px_rgba(192,132,252,0.5)] ${isHeavyDamage ? 'bg-purple-900' : 'bg-purple-400'}`} />}
+
+                                {/* Smoke/Fire Effect for critical damage */}
+                                {isHeavyDamage && (
+                                  <div className="absolute -top-2 -right-2 w-3 h-3 bg-black/40 rounded-full blur-[1px] animate-ping" />
+                                )}
+                                {isCritical && (
+                                  <div className="absolute top-0 left-0 w-full h-full bg-red-500/20 animate-pulse rounded-sm" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                         
                         {/* Wreckage Overlay */}
                         {/* Note: Wreckage state is in game engine, but we can infer from tile type if we had access to entity list here directly or pass it via props. 
@@ -755,6 +797,17 @@ export default function LevelEditor() {
                       top: hero.y * 32 + 4,
                     }}
                   >
+                    {/* Hero Health Bar */}
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/50 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-200 ${
+                          hero.health / hero.maxHealth < 0.3 ? 'bg-red-500 animate-pulse' : 
+                          hero.health / hero.maxHealth < 0.6 ? 'bg-yellow-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${(hero.health / hero.maxHealth) * 100}%` }} 
+                      />
+                    </div>
+
                     <div className="relative w-full h-full">
                       <User className="w-full h-full text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" />
                       {/* Direction Indicator */}
