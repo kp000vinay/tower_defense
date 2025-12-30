@@ -706,19 +706,25 @@ export function useGameEngine(
       turretsRef.current.forEach(turret => {
         if (turret.health <= 0) return;
         
-        if (time - turret.lastFired >= turret.cooldown) {
-          // Find target
-          let target = null;
-          let minDist = Infinity;
+        // Always update target for rotation even if on cooldown
+        let target = null;
+        let minDist = Infinity;
 
-          for (const enemy of enemiesRef.current) {
-            const dist = Math.sqrt(Math.pow(enemy.x - turret.x, 2) + Math.pow(enemy.y - turret.y, 2));
-            if (dist <= turret.range && dist < minDist) {
-              minDist = dist;
-              target = enemy;
-            }
+        for (const enemy of enemiesRef.current) {
+          const dist = Math.sqrt(Math.pow(enemy.x - turret.x, 2) + Math.pow(enemy.y - turret.y, 2));
+          if (dist <= turret.range && dist < minDist) {
+            minDist = dist;
+            target = enemy;
           }
-
+        }
+        
+        if (target) {
+           turret.targetId = target.id; // Update target ID for rotation
+        } else {
+           turret.targetId = null;
+        }
+        
+        if (time - turret.lastFired >= turret.cooldown) {
           if (target) {
             newProjectiles.push({
               id: crypto.randomUUID(),
