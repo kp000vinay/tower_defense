@@ -97,6 +97,8 @@ export default function LevelEditor() {
     skipPreparation,
     startGame, 
     stopGame,
+    turrets,
+    buildings,
     buildTurret,
     buildBuilding,
     repairBuilding,
