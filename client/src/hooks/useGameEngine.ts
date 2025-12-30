@@ -739,6 +739,14 @@ export function useGameEngine(
         
         if (target) {
            turret.targetId = target.id; // Update target ID for rotation
+           // Calculate rotation angle in degrees
+           const dx = target.x - turret.x;
+           const dy = target.y - turret.y;
+           // +90 because 0 degrees is usually "right" but our sprites might be "up" or "right"
+           // Assuming sprites face RIGHT by default (0 deg). If they face UP, subtract 90.
+           // Standard math: atan2(dy, dx) gives angle from X axis (Right).
+           // Let's assume sprites face RIGHT.
+           (turret as any).rotation = Math.atan2(dy, dx) * (180 / Math.PI);
         } else {
            turret.targetId = null;
         }

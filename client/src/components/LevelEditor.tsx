@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { TileType, LevelData, DEFAULT_WIDTH, DEFAULT_HEIGHT, TILE_COLORS, TURRET_COST, SNIPER_COST, UPGRADE_COST, SNIPER_UPGRADE_COST, ENEMY_STATS, QUARRY_COST, FORGE_COST, REPAIR_BUILDING_COST, REPAIR_FACTORY_COST, MAINTENANCE_HUB_COST, HERO_STATS } from '@/lib/gameTypes';
 import { findPath } from '@/lib/pathfinding';
 import { useGameEngine } from '@/hooks/useGameEngine';
@@ -21,6 +21,7 @@ export default function LevelEditor() {
   const [isDragging, setIsDragging] = useState(false);
   const [pathPreview, setPathPreview] = useState<{x: number, y: number}[] | null>(null);
   const [selectedTurret, setSelectedTurret] = useState<{x: number, y: number} | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   // Update grid when dimensions change
   useEffect(() => {
@@ -123,6 +124,26 @@ export default function LevelEditor() {
       return newGrid;
     });
   });
+
+  // Camera Follow Logic
+  useEffect(() => {
+    if (gameState === 'playing' && hero && viewportRef.current) {
+      const tileSize = 32;
+      const heroX = hero.x * tileSize;
+      const heroY = hero.y * tileSize;
+      
+      const viewport = viewportRef.current;
+      const viewportWidth = viewport.clientWidth;
+      const viewportHeight = viewport.clientHeight;
+      
+      // Center the camera on the hero
+      viewport.scrollTo({
+        left: heroX - viewportWidth / 2,
+        top: heroY - viewportHeight / 2,
+        behavior: 'smooth'
+      });
+    }
+  }, [hero?.x, hero?.y, gameState]);
   
   const handleTileClick = (x: number, y: number) => {
     if (gameState === 'playing') {
@@ -648,7 +669,10 @@ export default function LevelEditor() {
         </aside>
 
         {/* Game Grid */}
-        <main className="flex-1 bg-slate-950 relative overflow-auto flex items-center justify-center p-8">
+        <main 
+          ref={viewportRef}
+          className="flex-1 bg-slate-950 relative overflow-auto flex items-center justify-center p-8"
+        >
           <div 
             className="relative bg-slate-900 shadow-2xl border border-slate-800 select-none"
             style={{ 
@@ -672,8 +696,10 @@ export default function LevelEditor() {
                     style={{
                       left: x * 32,
                       top: y * 32,
-                      backgroundColor: isFog ? '#020617' : TILE_COLORS[tile] || TILE_COLORS.empty,
-                      opacity: isFog ? 1 : (tile === 'empty' ? 0.5 : 1)
+                      backgroundColor: isFog ? '#020617' : (tile === 'empty' ? 'transparent' : (TILE_COLORS[tile] || TILE_COLORS.empty)),
+                      backgroundImage: !isFog && tile === 'wall' ? 'url(/images/tile_wall.png)' : (!isFog && tile === 'empty' ? 'url(/images/tile_floor.png)' : 'none'),
+                      backgroundSize: 'cover',
+                      opacity: isFog ? 1 : 1
                     }}
                     onMouseDown={() => handleMouseDown(x, y)}
                     onMouseEnter={() => handleMouseEnter(x, y)}
@@ -689,8 +715,8 @@ export default function LevelEditor() {
                     {!isFog && (
                       <>
                         {/* Resource Icons */}
-                        {tile === 'resource_stone' && <Mountain className="w-5 h-5 text-stone-600 opacity-50 m-auto mt-1" />}
-                        {tile === 'resource_metal' && <Gem className="w-5 h-5 text-cyan-800 opacity-50 m-auto mt-1" />}
+                        {tile === 'resource_stone' && <div className="absolute inset-0 bg-[url('/images/building_quarry.png')] bg-cover opacity-50 grayscale" />}
+                        {tile === 'resource_metal' && <div className="absolute inset-0 bg-[url('/images/building_forge.png')] bg-cover opacity-50 grayscale" />}
                         
                         {/* Base / Start */}
                         {tile === 'base' && (
@@ -707,9 +733,9 @@ export default function LevelEditor() {
                         )}
 
                         {/* Abandoned Buildings */}
-                        {tile === 'abandoned_quarry' && <Pickaxe className="w-5 h-5 text-stone-500 m-auto mt-1" />}
-                        {tile === 'abandoned_forge' && <Hammer className="w-5 h-5 text-cyan-700 m-auto mt-1" />}
-                        {tile === 'abandoned_drone_factory' && <Bot className="w-5 h-5 text-indigo-700 m-auto mt-1" />}
+                        {tile === 'abandoned_quarry' && <div className="absolute inset-0 bg-[url('/images/building_quarry.png')] bg-cover opacity-50 grayscale brightness-50" />}
+                        {tile === 'abandoned_forge' && <div className="absolute inset-0 bg-[url('/images/building_forge.png')] bg-cover opacity-50 grayscale brightness-50" />}
+                        {tile === 'abandoned_drone_factory' && <div className="absolute inset-0 bg-[url('/images/building_drone_factory.png')] bg-cover opacity-50 grayscale brightness-50" />}
 
                         {/* Active Buildings & Turrets with Health Bars */}
                         {(() => {
@@ -744,10 +770,26 @@ export default function LevelEditor() {
                                 {tile === 'quarry' && <Pickaxe className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-stone-400' : 'text-stone-200 animate-bounce'}`} style={{ animationDuration: '2s' }} />}
                                 {tile === 'forge' && <Hammer className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-cyan-900' : 'text-cyan-200 animate-bounce'}`} style={{ animationDuration: '2s' }} />}
                                 {tile === 'drone_factory' && <Bot className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-indigo-900' : 'text-indigo-300'}`} />}
-                                {tile === 'maintenance_hub' && <HeartPulse className={`w-5 h-5 m-auto mt-1 ${isHeavyDamage ? 'text-emerald-900' : 'text-emerald-400'}`} />}
+                                {tile === 'maintenance_hub' && <div className="absolute inset-0 bg-[url('/images/building_maintenance.png')] bg-cover opacity-90" />}
                                 
-                                {tile === 'turret' && <div className={`w-4 h-4 rounded-full m-auto mt-2 shadow-[0_0_10px_rgba(96,165,250,0.5)] ${isHeavyDamage ? 'bg-blue-900' : 'bg-blue-400'}`} />}
-                                {tile === 'sniper' && <div className={`w-4 h-4 rounded-full m-auto mt-2 shadow-[0_0_10px_rgba(192,132,252,0.5)] ${isHeavyDamage ? 'bg-purple-900' : 'bg-purple-400'}`} />}
+                                {tile === 'turret' && (
+                                  <div 
+                                    className="absolute inset-0 bg-[url('/images/turret_standard.png')] bg-cover z-10"
+                                    style={{ 
+                                      transform: `rotate(${turret?.rotation || 0}deg)`,
+                                      filter: isHeavyDamage ? 'brightness(0.5) sepia(1) hue-rotate(-50deg)' : 'none'
+                                    }} 
+                                  />
+                                )}
+                                {tile === 'sniper' && (
+                                  <div 
+                                    className="absolute inset-0 bg-[url('/images/turret_sniper.png')] bg-cover z-10"
+                                    style={{ 
+                                      transform: `rotate(${turret?.rotation || 0}deg)`,
+                                      filter: isHeavyDamage ? 'brightness(0.5) sepia(1) hue-rotate(-50deg)' : 'none'
+                                    }} 
+                                  />
+                                )}
 
                                 {/* Smoke/Fire Effect for critical damage */}
                                 {isHeavyDamage && (
@@ -808,18 +850,21 @@ export default function LevelEditor() {
                       />
                     </div>
 
-                    <div className="relative w-full h-full">
-                      <User className="w-full h-full text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" />
-                      {/* Direction Indicator */}
+                    <div className="relative w-full h-full overflow-hidden">
                       <div 
-                        className="absolute top-1/2 left-1/2 w-8 h-8 border-t-2 border-r-2 border-white/50 rounded-full -translate-x-1/2 -translate-y-1/2"
+                        className="absolute w-[400%] h-[400%] bg-[url('/images/hero_walk_sheet_topdown.png')] z-30"
                         style={{ 
-                          transform: `translate(-50%, -50%) rotate(${
-                            hero.direction === 'up' ? -45 : 
-                            hero.direction === 'right' ? 45 : 
-                            hero.direction === 'down' ? 135 : 225
-                          }deg)` 
-                        }}
+                          backgroundSize: '100% 100%',
+                          transform: `scale(1.5)`,
+                          transformOrigin: 'center center',
+                          // Rows (Top) = Direction
+                          top: hero.direction === 'down' ? '0%' : 
+                               hero.direction === 'up' ? '-100%' : 
+                               hero.direction === 'left' ? '-200%' : '-300%',
+                          // Columns (Left) = Animation Frame
+                          left: hero.isMoving ? `-${Math.floor((Date.now() / 150) % 4) * 100}%` : '0%',
+                          filter: 'drop-shadow(0 0 5px rgba(0, 255, 255, 0.5))'
+                        }} 
                       />
                     </div>
                   </div>
@@ -870,11 +915,23 @@ export default function LevelEditor() {
                       className="absolute w-4 h-4 z-20 transition-all duration-100 ease-linear"
                       style={{ left: drone.x * 32 + 8, top: drone.y * 32 + 8 }}
                     >
-                      {drone.type === 'worker' ? (
-                        <Bot className={`w-full h-full ${drone.state === 'working' ? 'text-yellow-400 animate-bounce' : 'text-indigo-400'}`} />
-                      ) : (
-                        <HeartPulse className={`w-full h-full ${drone.state === 'working' ? 'text-green-400 animate-pulse' : 'text-emerald-600'}`} />
-                      )}
+                      <div className="relative w-full h-full overflow-hidden">
+                        <div 
+                          className={`absolute w-[400%] h-[400%] z-20 ${
+                            drone.type === 'worker' ? "bg-[url('/images/drone_worker_sheet.png')]" : 
+                            drone.type === 'repair' ? "bg-[url('/images/drone_repair_sheet.png')]" : 
+                            "bg-[url('/images/drone_harvester_sheet.png')]"
+                          }`}
+                          style={{ 
+                            backgroundSize: '100% 100%',
+                            // Rows (Top) = State (Idle vs Working)
+                            top: drone.state === 'working' ? '-100%' : '0%', 
+                            // Columns (Left) = Animation Frame
+                            left: `-${Math.floor((Date.now() / 100) % 4) * 100}%`,
+                            transform: 'scale(1.5)'
+                          }} 
+                        />
+                      </div>
                     </div>
                   );
                 })}
