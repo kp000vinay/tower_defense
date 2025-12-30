@@ -922,9 +922,10 @@ export default function LevelEditor() {
                             "bg-[url('/images/drone_harvester_sheet.png')]"
                           }`}
                           style={{ 
-                            backgroundSize: '400% 400%',
+                            backgroundSize: '400% 500%', // 4 columns, 5 rows
                             // Rows (Y) = State (Idle vs Working)
-                            backgroundPositionY: drone.state === 'working' ? '33.33%' : '0%', 
+                            // Row 0: Idle, Row 2: Working (based on visual inspection)
+                            backgroundPositionY: drone.state === 'working' ? '50%' : '0%', 
                             // Columns (X) = Animation Frame
                             backgroundPositionX: `${(Math.floor((Date.now() / 100) % 4)) * 33.33}%`,
                             transform: 'scale(1.5)'
