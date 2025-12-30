@@ -283,6 +283,7 @@ export function useGameEngine(
       speed: 3,
       type: 'worker'
     });
+    setDrones([...dronesRef.current]); // Force update UI immediately
 
     // Initialize turrets and buildings from grid
     turretsRef.current = [];
