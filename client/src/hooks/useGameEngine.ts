@@ -271,6 +271,19 @@ export function useGameEngine(
     };
     setHero(heroRef.current);
 
+    // Spawn Initial Worker Drone (so player can build first factory)
+    dronesRef.current.push({
+      id: crypto.randomUUID(),
+      x: startX,
+      y: startY,
+      targetX: null,
+      targetY: null,
+      state: 'idle',
+      jobId: null,
+      speed: 3,
+      type: 'worker'
+    });
+
     // Initialize turrets and buildings from grid
     turretsRef.current = [];
     buildingsRef.current = [];
