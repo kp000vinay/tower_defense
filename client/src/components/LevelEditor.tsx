@@ -859,7 +859,7 @@ export default function LevelEditor() {
                           // Rows (Y) = Direction
                           backgroundPositionY: hero.direction === 'down' ? '0%' : 
                                              hero.direction === 'up' ? '33.33%' : 
-                                             hero.direction === 'left' ? '66.66%' : '100%',
+                                             hero.direction === 'right' ? '66.66%' : '100%',
                           // Columns (X) = Animation Frame
                           backgroundPositionX: hero.isMoving ? `${(Math.floor((Date.now() / 150) % 4)) * 33.33}%` : '0%',
                           filter: 'drop-shadow(0 0 5px rgba(0, 255, 255, 0.5))'
