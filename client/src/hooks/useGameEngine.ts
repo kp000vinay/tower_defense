@@ -91,6 +91,8 @@ export function useGameEngine(
   const enemiesToSpawnRef = useRef<number>(0);
   const extractionTimerRef = useRef<number>(0);
   const isPreparationPhaseRef = useRef<boolean>(true);
+  const waveRef = useRef<number>(1);
+  const currentWaveRef = useRef<Wave>({ count: 5, interval: 1500, types: ['standard'] });
   
   // Initialize path when pathPreview changes
   useEffect(() => {
@@ -370,6 +372,7 @@ export function useGameEngine(
 
   const startWave = (waveNum: number) => {
     setWave(waveNum);
+    waveRef.current = waveNum;
     
     // Difficulty scaling
     const count = 5 + Math.floor(waveNum * 1.5);
@@ -379,9 +382,14 @@ export function useGameEngine(
     if (waveNum >= 3) types.push('scout');
     if (waveNum >= 5) types.push('tank');
     
-    setCurrentWave({ count, interval, types });
+    const newWave = { count, interval, types };
+    setCurrentWave(newWave);
+    currentWaveRef.current = newWave;
+    
     enemiesToSpawnRef.current = count;
     spawnTimerRef.current = 0;
+    
+    console.log(`Starting Wave ${waveNum}: ${count} enemies, interval ${interval}ms`);
   };
 
   const skipPreparation = () => {
@@ -395,6 +403,7 @@ export function useGameEngine(
   };
 
   const spawnEnemy = () => {
+    console.log('Spawning enemy...');
     // Spawn from random edge of map (Global Spawning)
     let x, y;
     const edge = Math.floor(Math.random() * 4); // 0: top, 1: right, 2: bottom, 3: left
@@ -407,11 +416,11 @@ export function useGameEngine(
       default: x = 0; y = 0;
     }
 
-    const type = currentWave.types[Math.floor(Math.random() * currentWave.types.length)];
+    const type = currentWaveRef.current.types[Math.floor(Math.random() * currentWaveRef.current.types.length)];
     const stats = ENEMY_STATS[type];
     
     // Scale health with wave
-    const healthMultiplier = 1 + (wave * 0.2);
+    const healthMultiplier = 1 + (waveRef.current * 0.2);
 
     const newEnemy: Enemy = {
       id: crypto.randomUUID(),
@@ -440,14 +449,14 @@ export function useGameEngine(
       if (!isPreparationPhaseRef.current) {
         if (enemiesToSpawnRef.current > 0) {
           spawnTimerRef.current += deltaTime;
-          if (spawnTimerRef.current >= currentWave.interval) {
+          if (spawnTimerRef.current >= currentWaveRef.current.interval) {
             spawnEnemy();
             enemiesToSpawnRef.current--;
             spawnTimerRef.current = 0;
           }
-        } else if (enemiesRef.current.length === 0 && wave < 100) { // Simple wave check
+        } else if (enemiesRef.current.length === 0 && waveRef.current < 100) { // Simple wave check
            // Wave complete, start next after delay? For now immediate
-           startWave(wave + 1);
+           startWave(waveRef.current + 1);
         }
       }
 
