@@ -96,6 +96,7 @@ export interface TurretEntity {
   maxHealth: number;
   type: 'standard' | 'sniper';
   isWreckage?: boolean;
+  rotation?: number; // Degrees
 }
 
 export interface BuildingEntity {
