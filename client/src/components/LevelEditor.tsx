@@ -743,12 +743,14 @@ export default function LevelEditor() {
                           const turret = turrets.find(t => t.x === x && t.y === y);
                           const entity = building || turret;
                           
-                          if (!entity) return null;
-
-                          const healthPercent = entity.health / entity.maxHealth;
+                          // Default values if entity is missing but tile exists
+                          const healthPercent = entity ? entity.health / entity.maxHealth : 1;
                           const isDamaged = healthPercent < 1;
                           const isCritical = healthPercent < 0.25;
                           const isHeavyDamage = healthPercent < 0.5;
+                          
+                          // If no entity and not a known tile type that needs rendering, return null
+                          if (!entity && !['turret', 'sniper', 'quarry', 'forge', 'drone_factory', 'maintenance_hub'].includes(tile)) return null;
 
                           return (
                             <div className="relative w-full h-full flex items-center justify-center">
