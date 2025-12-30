@@ -855,21 +855,15 @@ export default function LevelEditor() {
                         style={{ width: `${(hero.health / hero.maxHealth) * 100}%` }} 
                       />
                     </div>
-
-                    <div className="relative w-full h-full overflow-hidden">
-                      <div 
-                        className="absolute w-[400%] h-[400%] bg-[url('/images/hero_walk_sheet_topdown.png?v=2')] z-30"
+                    
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      <img 
+                        src="/images/hero_static.png?v=1"
+                        alt="Hero"
+                        className="w-full h-full object-contain z-30"
                         style={{ 
-                          backgroundSize: '100% 100%',
-                          transform: `scale(1.5)`,
-                          transformOrigin: 'center center',
-                          // Rows (Top) = Direction
-                          top: hero.direction === 'down' ? '0%' : 
-                               hero.direction === 'up' ? '-100%' : 
-                               hero.direction === 'left' ? '-200%' : '-300%',
-                          // Columns (Left) = Animation Frame
-                          left: hero.isMoving ? `-${Math.floor((Date.now() / 150) % 4) * 100}%` : '0%',
-                          filter: 'drop-shadow(0 0 5px rgba(0, 255, 255, 0.5))'
+                          filter: 'drop-shadow(0 0 5px rgba(0, 255, 255, 0.5))',
+                          transform: hero.direction === 'left' ? 'scaleX(-1)' : 'none' // Simple flip for left direction if needed
                         }} 
                       />
                     </div>
@@ -921,23 +915,15 @@ export default function LevelEditor() {
                       className="absolute w-4 h-4 z-20 transition-all duration-100 ease-linear"
                       style={{ left: drone.x * 32 + 8, top: drone.y * 32 + 8 }}
                     >
-                      <div className="relative w-full h-full overflow-hidden">
-                        <div 
-                          className={`absolute w-[400%] h-[500%] z-20 ${
-                            drone.type === 'worker' ? "bg-[url('/images/drone_worker_sheet.png?v=2')]" : 
-                            drone.type === 'repair' ? "bg-[url('/images/drone_repair_sheet.png?v=2')]" : 
-                            "bg-[url('/images/drone_harvester_sheet.png?v=2')]"
-                          }`}
-                          style={{ 
-                            backgroundSize: '100% 100%',
-                            // Rows (Top) = State (Idle vs Working)
-                            top: drone.state === 'working' ? '-100%' : '0%', 
-                            // Columns (Left) = Animation Frame
-                            left: `-${Math.floor((Date.now() / 100) % 4) * 100}%`,
-                            transform: 'scale(1.5)'
-                          }} 
-                        />
-                      </div>
+                      <img 
+                        src={
+                          drone.type === 'worker' ? "/images/drone_worker_static.png?v=1" : 
+                          drone.type === 'repair' ? "/images/drone_repair_static.png?v=1" : 
+                          "/images/drone_harvester_static.png?v=1"
+                        }
+                        alt="Drone"
+                        className="w-full h-full object-contain z-20"
+                      />
                     </div>
                   );
                 })}
