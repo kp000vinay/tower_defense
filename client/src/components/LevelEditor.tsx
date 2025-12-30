@@ -773,8 +773,10 @@ export default function LevelEditor() {
                                 {tile === 'maintenance_hub' && <div className="absolute inset-0 bg-[url('/images/building_maintenance.png')] bg-cover opacity-90" />}
                                 
                                 {tile === 'turret' && (
-                                  <div 
-                                    className="absolute inset-0 bg-[url('/images/turret_standard.png?v=2')] bg-cover z-10"
+                                  <img 
+                                    src="/images/turret_standard.png?v=3"
+                                    alt="Turret"
+                                    className="absolute inset-0 w-full h-full object-contain z-10"
                                     style={{ 
                                       transform: `rotate(${turret?.rotation || 0}deg)`,
                                       filter: isHeavyDamage ? 'brightness(0.5) sepia(1) hue-rotate(-50deg)' : 'none'
@@ -782,8 +784,10 @@ export default function LevelEditor() {
                                   />
                                 )}
                                 {tile === 'sniper' && (
-                                  <div 
-                                    className="absolute inset-0 bg-[url('/images/turret_sniper.png?v=2')] bg-cover z-10"
+                                  <img 
+                                    src="/images/turret_sniper.png?v=3"
+                                    alt="Sniper Turret"
+                                    className="absolute inset-0 w-full h-full object-contain z-10"
                                     style={{ 
                                       transform: `rotate(${turret?.rotation || 0}deg)`,
                                       filter: isHeavyDamage ? 'brightness(0.5) sepia(1) hue-rotate(-50deg)' : 'none'
