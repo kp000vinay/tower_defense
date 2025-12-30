@@ -774,7 +774,7 @@ export default function LevelEditor() {
                                 
                                 {tile === 'turret' && (
                                   <div 
-                                    className="absolute inset-0 bg-[url('/images/turret_standard.png')] bg-cover z-10"
+                                    className="absolute inset-0 bg-[url('/images/turret_standard.png?v=2')] bg-cover z-10"
                                     style={{ 
                                       transform: `rotate(${turret?.rotation || 0}deg)`,
                                       filter: isHeavyDamage ? 'brightness(0.5) sepia(1) hue-rotate(-50deg)' : 'none'
@@ -783,7 +783,7 @@ export default function LevelEditor() {
                                 )}
                                 {tile === 'sniper' && (
                                   <div 
-                                    className="absolute inset-0 bg-[url('/images/turret_sniper.png')] bg-cover z-10"
+                                    className="absolute inset-0 bg-[url('/images/turret_sniper.png?v=2')] bg-cover z-10"
                                     style={{ 
                                       transform: `rotate(${turret?.rotation || 0}deg)`,
                                       filter: isHeavyDamage ? 'brightness(0.5) sepia(1) hue-rotate(-50deg)' : 'none'
@@ -850,18 +850,19 @@ export default function LevelEditor() {
                       />
                     </div>
 
-                    <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+                    <div className="relative w-full h-full overflow-hidden">
                       <div 
-                        className="w-full h-full bg-[url('/images/hero_walk_sheet_topdown.png')] z-30"
+                        className="absolute w-[400%] h-[400%] bg-[url('/images/hero_walk_sheet_topdown.png?v=2')] z-30"
                         style={{ 
-                          backgroundSize: '400% 400%',
+                          backgroundSize: '100% 100%',
                           transform: `scale(1.5)`,
-                          // Rows (Y) = Direction
-                          backgroundPositionY: hero.direction === 'down' ? '0%' : 
-                                             hero.direction === 'up' ? '33.33%' : 
-                                             hero.direction === 'right' ? '66.66%' : '100%',
-                          // Columns (X) = Animation Frame
-                          backgroundPositionX: hero.isMoving ? `${(Math.floor((Date.now() / 150) % 4)) * 33.33}%` : '0%',
+                          transformOrigin: 'center center',
+                          // Rows (Top) = Direction
+                          top: hero.direction === 'down' ? '0%' : 
+                               hero.direction === 'up' ? '-100%' : 
+                               hero.direction === 'left' ? '-200%' : '-300%',
+                          // Columns (Left) = Animation Frame
+                          left: hero.isMoving ? `-${Math.floor((Date.now() / 150) % 4) * 100}%` : '0%',
                           filter: 'drop-shadow(0 0 5px rgba(0, 255, 255, 0.5))'
                         }} 
                       />
@@ -914,20 +915,19 @@ export default function LevelEditor() {
                       className="absolute w-4 h-4 z-20 transition-all duration-100 ease-linear"
                       style={{ left: drone.x * 32 + 8, top: drone.y * 32 + 8 }}
                     >
-                      <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+                      <div className="relative w-full h-full overflow-hidden">
                         <div 
-                          className={`w-full h-full z-20 ${
-                            drone.type === 'worker' ? "bg-[url('/images/drone_worker_sheet.png')]" : 
-                            drone.type === 'repair' ? "bg-[url('/images/drone_repair_sheet.png')]" : 
-                            "bg-[url('/images/drone_harvester_sheet.png')]"
+                          className={`absolute w-[400%] h-[500%] z-20 ${
+                            drone.type === 'worker' ? "bg-[url('/images/drone_worker_sheet.png?v=2')]" : 
+                            drone.type === 'repair' ? "bg-[url('/images/drone_repair_sheet.png?v=2')]" : 
+                            "bg-[url('/images/drone_harvester_sheet.png?v=2')]"
                           }`}
                           style={{ 
-                            backgroundSize: '400% 500%', // 4 columns, 5 rows
-                            // Rows (Y) = State (Idle vs Working)
-                            // Row 0: Idle, Row 2: Working (based on visual inspection)
-                            backgroundPositionY: drone.state === 'working' ? '50%' : '0%', 
-                            // Columns (X) = Animation Frame
-                            backgroundPositionX: `${(Math.floor((Date.now() / 100) % 4)) * 33.33}%`,
+                            backgroundSize: '100% 100%',
+                            // Rows (Top) = State (Idle vs Working)
+                            top: drone.state === 'working' ? '-100%' : '0%', 
+                            // Columns (Left) = Animation Frame
+                            left: `-${Math.floor((Date.now() / 100) % 4) * 100}%`,
                             transform: 'scale(1.5)'
                           }} 
                         />
